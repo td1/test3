@@ -404,7 +404,8 @@ void picoApp::draw(){
     	bUpdateBlobs = false;
 
     	// if ( (nBlobs == 8 || nBlobs == 4) && updatedMatrix == false)  {
-    	if (nBlobs == 8)  {
+    	if (nBlobs == 4)  { // need all 4 blobs detected to be valid
+
     		updateMatrix = true;
 
     		for (i=0; i < nBlobs; i++) {
@@ -417,7 +418,7 @@ void picoApp::draw(){
     		for (i=0; i < nBlobs; i++) {
     			if (blobPosX[i] < 0 || blobPosY[i] < 0 || blobPosX[i] > 2000 || blobPosY[i] > 2000) {
     				updateMatrix = false;
-    				// printf("\n>>>>> blobPos are invalid...updateMatrix = %d\n");
+    				printf("\n>>>>> blobPos are invalid...updateMatrix = %d\n");
     				break;
     			}
     		}
@@ -430,8 +431,8 @@ void picoApp::draw(){
     			printf("\n");
     		}
 
-    		for (i=0; i<8; i++) {
-    			for (j=i+1; j<8; j++) {
+    		for (i=0; i<nBlobs; i++) {
+    			for (j=i+1; j<nBlobs; j++) {
     				if (blobPosX[i]>blobPosX[j]) {
     					varx = blobPosX[i];
     					vary = blobPosY[i];
@@ -443,7 +444,7 @@ void picoApp::draw(){
     			}
     		}
 
-    		for (i=0; i<8; i+=2) {
+    		for (i=0; i<nBlobs; i+=2) {
     			if (blobPosY[i] > blobPosY[i+1]) {
     				varx = blobPosX[i];
     				vary = blobPosY[i];
@@ -454,6 +455,14 @@ void picoApp::draw(){
     			}
     		}
 
+    		if (updateMatrix == true) {
+        		printf("\nFRAME[%d]:", nFrame);
+        		for (i=0; i < nBlobs; i++) {
+        			printf("(%d %d)",blobPosX[i],blobPosY[i]);
+        		}
+        		printf("\n");
+        	}
+
     		/* getMatrixDistance to determine updating the homography matrix */
     		float distance = 0.0;
     		for (i=0; i<nBlobs; i++) {
@@ -462,10 +471,15 @@ void picoApp::draw(){
     			distance += blobPos[i].squareDistance(blobPosSaved[i]);
     		}
 
-    		if (distance < 1000 && updateMatrix == true) {
+    		// if (distance < 1000 && updateMatrix == true) {
+    		if (updateMatrix == true) { // SKIP CHECKING DISTANCE
     			printf("distance: %5.2f\n", distance);
-    			for (i=0; i<nBlobs; i++)
+//    			printf("\nFRAME[%d]:", nFrame);
+    			for (i=0; i<nBlobs; i++) {
     				blobPosSaved[i] = blobPos[i];
+//    				printf("(%d %d %d)",blobPosSaved[i].x,blobPosSaved[i].y);
+    			}
+//    			printf("\n");
     		}
     		else {
     			updateMatrix = false;
@@ -485,66 +499,31 @@ void picoApp::draw(){
     unsigned char *pixels = omxPlayer.getPixels();
     nChannels = 4;
 
-    switch (boardID) {
-      	case ID_TD1:
-       		// break;
-      	case ID_TD2:
-      		if (updateMatrix == true) {
-				src[0].set(120,40);
-				src[1].set(120,440);
-				src[2].set(560,40);
-				src[3].set(560,440);
+	if (updateMatrix == true) {
+		src[0].set(120,40);
+		src[1].set(120,440);
+		src[2].set(560,40);
+		src[3].set(560,440);
+		dst[0].set(blobPosSaved[0].x,blobPosSaved[0].y);
+		dst[1].set(blobPosSaved[1].x,blobPosSaved[1].y);
+		dst[2].set(blobPosSaved[2].x,blobPosSaved[2].y);
+		dst[3].set(blobPosSaved[3].x,blobPosSaved[3].y);
+		ofh1 = getResyncHomography3x3(src,dst);
+		ofh1inv = getResyncHomography3x3(dst,src);
 
-				// HUNG HERE
-//				dst[0].set(blobPosX[0],blobPosY[0]);
-//				dst[1].set(blobPosX[1],blobPosY[1]);
-//				dst[2].set(blobPosX[2],blobPosY[2]);
-//				dst[3].set(blobPosX[3],blobPosY[3]);
-				dst[0].set(blobPosSaved[0].x,blobPosSaved[0].y);
-				dst[1].set(blobPosSaved[1].x,blobPosSaved[1].y);
-				dst[2].set(blobPosSaved[2].x,blobPosSaved[2].y);
-				dst[3].set(blobPosSaved[3].x,blobPosSaved[3].y);
+		Hc = ofh1inv;
 
-				ofh1 = getResyncHomography3x3(src,dst);
-				ofh1inv = getResyncHomography3x3(dst,src);
+		resyncMatrix[0] = Hc[0]; resyncMatrix[1] = Hc[1]; resyncMatrix[2] = 0; resyncMatrix[3] = Hc[2];
+		resyncMatrix[4] = Hc[3]; resyncMatrix[5] = Hc[4]; resyncMatrix[6] = 0; resyncMatrix[7] = Hc[5];
+		resyncMatrix[8] = 0;     resyncMatrix[9] = 0;     resyncMatrix[10]= 0; resyncMatrix[11] = 0;
+		resyncMatrix[12] = Hc[6];resyncMatrix[13] = Hc[7];resyncMatrix[14]= 0; resyncMatrix[15] = Hc[8];
 
-//				dst[0].set(blobPosX[4],blobPosY[4]);
-//				dst[1].set(blobPosX[5],blobPosY[5]);
-//				dst[2].set(blobPosX[6],blobPosY[6]);
-//				dst[3].set(blobPosX[7],blobPosY[7]);
-				dst[0].set(blobPosSaved[4].x,blobPosSaved[4].y);
-				dst[1].set(blobPosSaved[5].x,blobPosSaved[5].y);
-				dst[2].set(blobPosSaved[6].x,blobPosSaved[6].y);
-				dst[3].set(blobPosSaved[7].x,blobPosSaved[7].y);
+		printf(">>>>>>>>>>>>> Updated resyncMatrix = ");
+		updateMatrix = false;
 
-				ofh2 = getResyncHomography3x3(src,dst);
-				ofh2inv = getResyncHomography3x3(dst,src);
-
-				if (boardID == ID_TD1) {
-				}
-				else {
-					Hc = ofh2inv*ofh1;
-
-					resyncMatrix[0] = Hc[0]; resyncMatrix[1] = Hc[1]; resyncMatrix[2] = 0; resyncMatrix[3] = Hc[2];
-					resyncMatrix[4] = Hc[3]; resyncMatrix[5] = Hc[4]; resyncMatrix[6] = 0; resyncMatrix[7] = Hc[5];
-					resyncMatrix[8] = 0;     resyncMatrix[9] = 0;     resyncMatrix[10]= 0; resyncMatrix[11] = 0;
-					resyncMatrix[12] = Hc[6];resyncMatrix[13] = Hc[7];resyncMatrix[14]= 0; resyncMatrix[15] = Hc[8];
-				}
-
-				printf(">>>>>>>>>>>>> Updated resyncMatrix = ");
-				updateMatrix = false;
-				// updatedMatrix = true;
-
-				for (i=0; i<16; i++)
-					printf("%4.2lf ", resyncMatrix[i]);
-				printf("\n");
-			}
-			break;
-		case ID_TD3:
-			break;
-		case ID_TD4:
-			break;
-		default:;
+		for (i=0; i<16; i++)
+			printf("%4.2lf ", resyncMatrix[i]);
+		printf("\n");
 	}
 
     //unsigned char *capPixels = captureVid.getPixels(); // NOTE: getPixels at draw first, should be at update
