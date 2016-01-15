@@ -3,7 +3,7 @@
 
 void picoApp::setup()
 {
-    ofSetLogLevel(OF_LOG_WARNING);
+    ofSetLogLevel(OF_LOG_VERBOSE);
     ofSetLogLevel("ofThread", OF_LOG_WARNING);
 
     printf("SELF ADJUSTING PROJECTED VIDEO\n");
@@ -40,6 +40,7 @@ void picoApp::setup()
     grayDiff.allocate(CAPWIDTH,CAPHEIGHT);
 
     ofo2.set(1,0,640,0,1,0,0,0,1);
+    // initially threshold value, adjust by +/- key
 	threshold = 90;
     ofHideCursor();
     sendBlobsEnable = false;
@@ -52,6 +53,9 @@ void picoApp::setup()
     resyncMatrix[4] = 0; resyncMatrix[5] = 1; resyncMatrix[6] = 0; resyncMatrix[7] = 0;
     resyncMatrix[8] = 0; resyncMatrix[9] = 0; resyncMatrix[10]= 1; resyncMatrix[11]= 0;
     resyncMatrix[12]= 0; resyncMatrix[13]= 0; resyncMatrix[14]= 0; resyncMatrix[15]= 1;
+
+    // initially update Href
+    updateHref = true;
 }
 
 void picoApp::update()
@@ -508,22 +512,29 @@ void picoApp::draw(){
 		dst[1].set(blobPosSaved[1].x,blobPosSaved[1].y);
 		dst[2].set(blobPosSaved[2].x,blobPosSaved[2].y);
 		dst[3].set(blobPosSaved[3].x,blobPosSaved[3].y);
-		ofh1 = getResyncHomography3x3(src,dst);
-		ofh1inv = getResyncHomography3x3(dst,src);
-
-		Hc = ofh1inv;
+		// HUNG
+		if (updateHref == true) {
+			updateHref = false;
+			ofhref = getResyncHomography3x3(src,dst);
+			printf(">>>>>>>>>>>>> updated Href\n");
+		}
+		else {
+			ofh1inv = getResyncHomography3x3(dst,src);
+			printf(">>>>>>>>>>>>> updated H1\n");
+		}
+		Hc = ofh1inv*ofhref;
 
 		resyncMatrix[0] = Hc[0]; resyncMatrix[1] = Hc[1]; resyncMatrix[2] = 0; resyncMatrix[3] = Hc[2];
 		resyncMatrix[4] = Hc[3]; resyncMatrix[5] = Hc[4]; resyncMatrix[6] = 0; resyncMatrix[7] = Hc[5];
 		resyncMatrix[8] = 0;     resyncMatrix[9] = 0;     resyncMatrix[10]= 0; resyncMatrix[11] = 0;
 		resyncMatrix[12] = Hc[6];resyncMatrix[13] = Hc[7];resyncMatrix[14]= 0; resyncMatrix[15] = Hc[8];
 
-		printf(">>>>>>>>>>>>> Updated resyncMatrix = ");
-		updateMatrix = false;
-
+		printf(">>>>>>>>>>>>> updated resyncMatrix = ");
 		for (i=0; i<16; i++)
 			printf("%4.2lf ", resyncMatrix[i]);
 		printf("\n");
+
+		updateMatrix = false;
 	}
 
     //unsigned char *capPixels = captureVid.getPixels(); // NOTE: getPixels at draw first, should be at update
@@ -614,48 +625,6 @@ void picoApp::draw(){
         // ofRect(80,80,640-160,480-160);
     // }
 #endif
-}
-
-void picoApp::keyPressed  (int key)
-{
-	switch (key) {
-		case 'p':
-			printf("toggle pause, current pause = %d\n",omxPlayer.isPaused());
-			omxPlayer.togglePause();
-			// pauseFlag = ~pauseFlag;
-			// if (pauseFlag)
-				// omxPlayer.setPaused(!omxPlayer.isPaused());
-				// OMXClock::OMXPause(true);
-			// else
-				// omxPlayer.togglePaused();
-				// OMXClock::OMXResume(true);
-		break;
-	}
-
-
-
-
-
-#if	TEST_RESYNC_CAPTURE
-	switch (key) {
-		case ' ':
-    		bUpdateBackground = true;
-    		break;
-    	case '+':
-    		threshold ++;
-    		if (threshold > 255) threshold = 255;
-    		break;
-    	case '-':
-    		threshold --;
-    		if (threshold < 0) threshold = 0;
-    		break;
-	}
-#endif
-}
-
-void picoApp::onCharacterReceived(SSHKeyListenerEventData& e)
-{
-    keyPressed((int)e.character);
 }
 
 void picoApp::readMatrix2(char* filename)
@@ -3452,4 +3421,38 @@ void picoApp::mousePressed(int x, int y, int button){
 			break;
 		default:;
 	}
+}
+
+void picoApp::keyPressed(int key) {
+	ofLog(OF_LOG_VERBOSE, "%c keyPressed", key);
+
+	switch (key) {
+		case 'r':
+		updateHref = true;
+		ofLog(OF_LOG_VERBOSE, ">>>>> lock position", key);
+		break;
+
+		case 'p':
+		printf("toggle pause, current pause = %d\n",omxPlayer.isPaused());
+		omxPlayer.togglePause();
+		break;
+
+		case '+':
+    	threshold ++;
+		if (threshold > 255) threshold = 255;
+		printf("threshold increased to %d\n", threshold);
+		break;
+
+		case '-':
+		threshold --;
+		if (threshold < 0) threshold = 0;
+		printf("threshold decreased to %d\n", threshold);
+	    break;
+
+		default:;
+	}
+}
+
+void picoApp::onCharacterReceived(KeyListenerEventData& e) {
+	keyPressed((int) e.character);
 }

@@ -4,7 +4,7 @@
 #include "ofxOMXPlayer.h"
 #include "ofxOMXCapture.h"
 #include "myID.h"
-#include "ConsoleListener.h"
+#include "TerminalListener.h"
 #include "ofxOpenCv.h"
 
 extern "C" {
@@ -101,7 +101,7 @@ static int myboardID;
 #define CAPWIDTH		640		// RESYNC CAPTURE WIDTH
 #define CAPHEIGHT		480 	// RESYNC CAPTURE HEIGHT
 
-class picoApp : public ofBaseApp, public SSHKeyListener{
+class picoApp : public ofBaseApp, public KeyListener{
 	
 public:
 	
@@ -111,13 +111,12 @@ public:
 	
 	void keyPressed(int key);
 	void mousePressed(int x, int y, int button);
+	TerminalListener consoleListener;
+	void onCharacterReceived(KeyListenerEventData& e);
 
 	ofxOMXPlayer omxPlayer;
 	bool doSaveImage;
 	
-	ConsoleListener consoleListener;
-	void onCharacterReceived(SSHKeyListenerEventData& e);
-
 	void readMatrix(char* filename);
 	void readMatrix2(char* filename);
 
@@ -210,11 +209,14 @@ public:
 
 	bool updateMatrix;
 	bool updatedMatrix;
+	bool updateHref;
 
 	ofMatrix3x3 ofh1;
+	ofMatrix3x3 ofh1inv;
 	ofMatrix3x3 ofh2inv;
-	ofMatrix3x3 ofh2; 		// add for test only
-	ofMatrix3x3 ofh1inv; 	// add for test only
+	ofMatrix3x3 ofh2;
+	ofMatrix3x3 ofhref;
+
 	ofMatrix3x3 ofo2;
 	ofMatrix3x3 Hc;
 
