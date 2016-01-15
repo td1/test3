@@ -481,7 +481,7 @@ void picoApp::draw(){
 //    			printf("\nFRAME[%d]:", nFrame);
     			for (i=0; i<nBlobs; i++) {
     				blobPosSaved[i] = blobPos[i];
-//    				printf("(%d %d %d)",blobPosSaved[i].x,blobPosSaved[i].y);
+    				printf("(%lf %lf)",blobPosSaved[i].x,blobPosSaved[i].y);
     			}
 //    			printf("\n");
     		}
