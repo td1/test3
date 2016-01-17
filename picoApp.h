@@ -6,6 +6,7 @@
 #include "myID.h"
 #include "TerminalListener.h"
 #include "ofxOpenCv.h"
+#include "ofUtils.h"
 
 extern "C" {
 #include <unistd.h>

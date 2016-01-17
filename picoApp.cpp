@@ -9,7 +9,8 @@ void picoApp::setup()
     printf("SELF ADJUSTING PROJECTED VIDEO\n");
 
     startPlayVideo = false;
-    string videoPath = ofToDataPath("../../../video/grid_640x480.mp4", true);
+    // string videoPath = ofToDataPath("../../../video/grid_640x480.mp4", true);
+    string videoPath = ofToDataPath("../../../video/window_640x480.mp4", true);
 
     omxPlayer.loadMovie(videoPath); 
     width = omxPlayer.getWidth();
@@ -60,12 +61,24 @@ void picoApp::setup()
 
 void picoApp::update()
 {
+	struct timeval now;
+	double timeNow;
+
+	gettimeofday(&now, NULL);
+	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+	ofLog(OF_LOG_NOTICE, "update start  = %1.3lf", timeNow);
+
     omxPlayer.updatePixels();
     bool bNewFrame = false;
     ofBackground(0,0,0);
     bNewFrame = captureVid.isFrameNew();
 
     if (bNewFrame) {
+    	// HUNG
+    	gettimeofday(&now, NULL);
+    	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+    	ofLog(OF_LOG_NOTICE, "capture time  = %4.3lf", timeNow);
+
     	captureImg.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT);
     	grayCaptureImg = captureImg;
     	if (bUpdateBackground == true) {
@@ -85,12 +98,18 @@ void picoApp::update()
 
     	// if (videoEnable == false)
     	sendBlobsEnable = (sendBlobsEnable == true ? false : true);
+
+    	gettimeofday(&now, NULL);
+    	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+    	ofLog(OF_LOG_NOTICE, "capture stop  = %4.3lf", timeNow);
     }
 }
 
 void picoApp::draw(){
     int i,j,k;
     int var1, var2, nChannels;
+    struct timeval now;
+    double timeNow;
 
 #if 0 // TEST_RESYNC_HOMOGRAPHY
     // ofLog(OF_LOG_NOTICE, "test resync homography...");
@@ -402,6 +421,11 @@ void picoApp::draw(){
 	int blobPosX[8];
     int blobPosY[8];
     int blobPosA[8];
+
+    gettimeofday(&now, NULL);
+    timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+    ofLog(OF_LOG_NOTICE, "draw start    = %4.3lf", timeNow);
+
     int nBlobs = contourFinder.nBlobs;
 
     if (bUpdateBlobs) {
@@ -494,12 +518,6 @@ void picoApp::draw(){
     	}
     }
 
-    if (nFrame == 50) {
-    	printf(">>>>> send out video after timeout for test at frame = %d\n", nFrame);
-    	videoEnable = true;
-        sendBlobsEnable = false;
-    }
-
     unsigned char *pixels = omxPlayer.getPixels();
     nChannels = 4;
 
@@ -529,10 +547,15 @@ void picoApp::draw(){
 		resyncMatrix[8] = 0;     resyncMatrix[9] = 0;     resyncMatrix[10]= 0; resyncMatrix[11] = 0;
 		resyncMatrix[12] = Hc[6];resyncMatrix[13] = Hc[7];resyncMatrix[14]= 0; resyncMatrix[15] = Hc[8];
 
-		printf(">>>>>>>>>>>>> updated resyncMatrix = ");
-		for (i=0; i<16; i++)
-			printf("%4.2lf ", resyncMatrix[i]);
-		printf("\n");
+//		printf(">>>>>>>>>>>>> updated resyncMatrix = ");
+//		for (i=0; i<16; i++)
+//			printf("%4.2lf ", resyncMatrix[i]);
+//		printf("\n");
+		// HUNG
+    	struct timeval now;
+		gettimeofday(&now, NULL);
+    	double timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+    	ofLog(OF_LOG_NOTICE, "update MATRIX at %4.3lf", timeNow);
 
 		updateMatrix = false;
 	}
@@ -594,11 +617,16 @@ void picoApp::draw(){
 
     ofSetHexColor(0xFFFFFF);
     if (sendBlobsEnable == true) {
-	ofCircle(HOFFSET+VOFFSET,VOFFSET,BLOBRADIUS);  
-	ofCircle(WIDTH-HOFFSET-VOFFSET,VOFFSET,BLOBRADIUS);  
-	ofCircle(HOFFSET+VOFFSET,HEIGHT-VOFFSET,BLOBRADIUS);  
-	ofCircle(WIDTH-HOFFSET-VOFFSET,HEIGHT-VOFFSET,BLOBRADIUS);  
+    	ofCircle(HOFFSET+VOFFSET,VOFFSET,BLOBRADIUS);
+    	ofCircle(WIDTH-HOFFSET-VOFFSET,VOFFSET,BLOBRADIUS);
+    	ofCircle(HOFFSET+VOFFSET,HEIGHT-VOFFSET,BLOBRADIUS);
+    	ofCircle(WIDTH-HOFFSET-VOFFSET,HEIGHT-VOFFSET,BLOBRADIUS);
     }
+
+    gettimeofday(&now, NULL);
+    timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+    ofLog(OF_LOG_NOTICE, "send %d Blob   = %4.3lf", sendBlobsEnable, timeNow);
+
     drawFrame ++;
 
 #if 0
