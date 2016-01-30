@@ -7,6 +7,7 @@
 #include "TerminalListener.h"
 #include "ofxOpenCv.h"
 #include "ofUtils.h"
+#include "ofImage.h"
 
 extern "C" {
 #include <unistd.h>
@@ -144,10 +145,14 @@ public:
 #if RESYNC | TEST_RESYNC_CAPTURE
 	ofVideoGrabber 			captureVid;
 #endif
-	ofxCvColorImage 		captureImg;
+	ofxCvColorImage 		colorCaptureImg;
+	ofxCvColorImage 		colorCaptureImgSaved;
+	ofxCvColorImage 		colorDiff;
+
 	ofxCvGrayscaleImage 	grayCaptureImg;
 	ofxCvGrayscaleImage 	grayCaptureImgSaved;
 	ofxCvGrayscaleImage 	grayDiff;
+
 	ofxCvContourFinder 		contourFinder;
 
 	int 					threshold;

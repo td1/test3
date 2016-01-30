@@ -22,11 +22,13 @@ void picoApp::setup()
         
     ofBackground(0,0,0);
     consoleListener.setup(this);
-    ofSetFrameRate(FRAME_RATE);
-    
+    // ofSetFrameRate(FRAME_RATE);
+    ofSetFrameRate(5);
+    ofSetVerticalSync(true);
+
     captureConfig.width = CAPWIDTH;
     captureConfig.height = CAPHEIGHT;
-    captureConfig.framerate = 30;
+    captureConfig.framerate = 5; // HUNG RATE=5 30;
     captureConfig.isUsingTexture = true;
     captureConfig.enablePixels = true;
 	
@@ -35,10 +37,15 @@ void picoApp::setup()
 	    pixelOutput.allocate(width, height, GL_RGBA); 
 	}
 	
-    captureImg.allocate(CAPWIDTH,CAPHEIGHT);
+    colorCaptureImg.allocate(CAPWIDTH,CAPHEIGHT);
+    colorCaptureImgSaved.allocate(CAPWIDTH,CAPHEIGHT);
+    colorDiff.allocate(CAPWIDTH,CAPHEIGHT);
+
     grayCaptureImg.allocate(CAPWIDTH,CAPHEIGHT);
     grayCaptureImgSaved.allocate(CAPWIDTH,CAPHEIGHT);
     grayDiff.allocate(CAPWIDTH,CAPHEIGHT);
+
+    grabImg.allocate(CAPWIDTH,CAPHEIGHT,OF_IMAGE_GRAYSCALE); // HUNG1
 
     ofo2.set(1,0,640,0,1,0,0,0,1);
     // initially threshold value, adjust by +/- key
@@ -66,7 +73,7 @@ void picoApp::update()
 
 	gettimeofday(&now, NULL);
 	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
-	ofLog(OF_LOG_NOTICE, "update start  = %1.3lf", timeNow);
+	// ofLog(OF_LOG_NOTICE, "update start  = %1.3lf", timeNow);
 
     omxPlayer.updatePixels();
     bool bNewFrame = false;
@@ -74,34 +81,60 @@ void picoApp::update()
     bNewFrame = captureVid.isFrameNew();
 
     if (bNewFrame) {
-    	// HUNG
+
     	gettimeofday(&now, NULL);
     	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
-    	ofLog(OF_LOG_NOTICE, "capture time  = %4.3lf", timeNow);
+    	// ofLog(OF_LOG_NOTICE, "capture time  = %4.3lf", timeNow);
 
-    	captureImg.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT);
-    	grayCaptureImg = captureImg;
-    	if (bUpdateBackground == true) {
-    		// at least update the first time
-    		grayCaptureImgSaved = grayCaptureImg;
-    		bUpdateBackground = false;
-    		ofLog(OF_LOG_NOTICE, ">>>>> Update background the first time");
-    	}
+    	// HUNG1
+    	// SAVE IMAGES FOR DEBUG
+    	// string fileName = "frame"+ofToString(nFrame)+".png";
+    	// case2 grabImg.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_COLOR, true);
+    	//       grabImg.saveImage(fileName);
+
+    	colorCaptureImg.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT);
+    	grayCaptureImg = colorCaptureImg;
+// grayCaptureImg.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT);
+//    	if (bUpdateBackground == true) {
+//    		// at least update the first time
+//    		grayCaptureImgSaved = grayCaptureImg;
+//    		bUpdateBackground = false;
+//    		// ofLog(OF_LOG_NOTICE, ">>>>> Update background the first time");
+//    	}
+
     	grayDiff.absDiff(grayCaptureImgSaved, grayCaptureImg);
+    	grayCaptureImgSaved = grayCaptureImg;
+
+    	// HUNG1 TEST case 3
+    	// grabImg.setFromPixels(grayDiff.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_GRAYSCALE, true);
+
+    	// REF SAVE CAPTURE COLOR IMAGE
+    	// grabImg.setFromPixels(captureImg.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_COLOR, true);
+    	// string fileName = "frame"+ofToString(nFrame)+".png";
+    	// grabImg.saveImage(fileName);
+
+    	// REF SAVE DIFF CAPTURE COLOR IMAGE
+    	// grabImg.setFromPixels(grayDiff.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_GRAYSCALE, true);
+    	grabImg.setFromPixels(grayCaptureImg.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_GRAYSCALE, true);
+    	string fileName = "frame"+ofToString(nFrame)+".png";
+    	grabImg.saveImage(fileName);
+
+
+    	nFrame ++;
+
     	grayDiff.threshold(80);
     	contourFinder.findContours(grayDiff, MIN_AREA, MAX_AREA, 20, false);
     	if (contourFinder.nBlobs) {
     		bUpdateBlobs = true;
     	}
-    	grayCaptureImgSaved = grayCaptureImg;
-    	nFrame ++;
 
     	// if (videoEnable == false)
     	sendBlobsEnable = (sendBlobsEnable == true ? false : true);
 
     	gettimeofday(&now, NULL);
     	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
-    	ofLog(OF_LOG_NOTICE, "capture stop  = %4.3lf", timeNow);
+    	// ofLog(OF_LOG_NOTICE, "capture stop  = %4.3lf", timeNow);
+//    	}
     }
 }
 
@@ -424,7 +457,7 @@ void picoApp::draw(){
 
     gettimeofday(&now, NULL);
     timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
-    ofLog(OF_LOG_NOTICE, "draw start    = %4.3lf", timeNow);
+    // ofLog(OF_LOG_NOTICE, "draw start    = %4.3lf", timeNow);
 
     int nBlobs = contourFinder.nBlobs;
 
@@ -446,7 +479,7 @@ void picoApp::draw(){
     		for (i=0; i < nBlobs; i++) {
     			if (blobPosX[i] < 0 || blobPosY[i] < 0 || blobPosX[i] > 2000 || blobPosY[i] > 2000) {
     				updateMatrix = false;
-    				printf("\n>>>>> blobPos are invalid...updateMatrix = %d\n");
+    				// printf("\n>>>>> blobPos are invalid...updateMatrix = %d\n");
     				break;
     			}
     		}
@@ -555,7 +588,7 @@ void picoApp::draw(){
     	struct timeval now;
 		gettimeofday(&now, NULL);
     	double timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
-    	ofLog(OF_LOG_NOTICE, "update MATRIX at %4.3lf", timeNow);
+    	// ofLog(OF_LOG_NOTICE, "update MATRIX at %4.3lf", timeNow);
 
 		updateMatrix = false;
 	}
@@ -625,11 +658,11 @@ void picoApp::draw(){
 
     gettimeofday(&now, NULL);
     timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
-    ofLog(OF_LOG_NOTICE, "send %d Blob   = %4.3lf", sendBlobsEnable, timeNow);
+    // ofLog(OF_LOG_NOTICE, "send %d Blob   = %4.3lf", sendBlobsEnable, timeNow);
 
     drawFrame ++;
 
-#if 0
+#if 1
     stringstream info;
     info <<"\n" << "output frame rate: " << ofGetFrameRate() << "drawFrame: " << drawFrame << "\n";
     info << "Player: " << omxPlayer.getWidth() << "x" << omxPlayer.getHeight() << " @ "<< omxPlayer.getFPS() << "fps"<< "\n";
@@ -638,7 +671,7 @@ void picoApp::draw(){
 #endif
     
     /////////////////////////////////////////////
-    // Display for testing only
+    // capture for testing only
     /////////////////////////////////////////////
 #if 0
     // if (nFrame > 100) {
@@ -652,7 +685,18 @@ void picoApp::draw(){
         // ofSetHexColor(0x000000);
         // ofRect(80,80,640-160,480-160);
     // }
+    grabImg.grabScreen(0,0,640,480);
+    string fileName = "frame_"+ofToString(nFrame)+".png";
+    grabImg.saveImage(fileName);
 #endif
+
+    // HUNG1
+    // grabImg.grabScreen(0,0,640,480);
+    // string fileName = "frame"+ofToString(nFrame)+".png";
+    // grabImg.saveImage(fileName);
+
+
+
 }
 
 void picoApp::readMatrix2(char* filename)
