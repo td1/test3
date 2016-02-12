@@ -22,13 +22,12 @@ void picoApp::setup()
         
     ofBackground(0,0,0);
     consoleListener.setup(this);
-    // ofSetFrameRate(FRAME_RATE);
-    ofSetFrameRate(5);
+    ofSetFrameRate(FRAME_RATE); // HUNG3 FRAME RATE 5, 1 to debug
     ofSetVerticalSync(true);
 
     captureConfig.width = CAPWIDTH;
     captureConfig.height = CAPHEIGHT;
-    captureConfig.framerate = 5; // HUNG RATE=5 30;
+    captureConfig.framerate = FRAME_RATE; // HUNG3 FRAME RATE 5, 1 to debug
     captureConfig.isUsingTexture = true;
     captureConfig.enablePixels = true;
 	
@@ -46,13 +45,15 @@ void picoApp::setup()
     grayDiff.allocate(CAPWIDTH,CAPHEIGHT);
 
     grabImg.allocate(CAPWIDTH,CAPHEIGHT,OF_IMAGE_GRAYSCALE); // HUNG1
+    grayCaptureInvert = new unsigned char[CAPWIDTH*CAPHEIGHT*3];
 
     ofo2.set(1,0,640,0,1,0,0,0,1);
     // initially threshold value, adjust by +/- key
-	threshold = 90;
+	threshold = 180;
     ofHideCursor();
     sendBlobsEnable = false;
     bUpdateBackground = true;
+    bSaveImage = false;
 
     videoEnable = false;
     updatedMatrix = false;
@@ -62,8 +63,14 @@ void picoApp::setup()
     resyncMatrix[8] = 0; resyncMatrix[9] = 0; resyncMatrix[10]= 1; resyncMatrix[11]= 0;
     resyncMatrix[12]= 0; resyncMatrix[13]= 0; resyncMatrix[14]= 0; resyncMatrix[15]= 1;
 
-    // initially update Href
-    updateHref = true;
+    // HUNG3
+    updateHref = false;
+    validHref = false;
+    updateH1 = false;
+    validH1 = false;
+
+    debug_flag = false;
+    show_debug_flag = false;
 }
 
 void picoApp::update()
@@ -92,18 +99,49 @@ void picoApp::update()
     	// case2 grabImg.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_COLOR, true);
     	//       grabImg.saveImage(fileName);
 
-    	colorCaptureImg.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT);
-    	grayCaptureImg = colorCaptureImg;
-// grayCaptureImg.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT);
-//    	if (bUpdateBackground == true) {
-//    		// at least update the first time
-//    		grayCaptureImgSaved = grayCaptureImg;
-//    		bUpdateBackground = false;
-//    		// ofLog(OF_LOG_NOTICE, ">>>>> Update background the first time");
-//    	}
+    	// HUNG3
+    	// Using generated white blobs to get Href
+    	if (updateHref == true) {
+    		colorCaptureImg.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT);
+    		grayCaptureImg = colorCaptureImg;
+    		grayCaptureImg.threshold(threshold);
+    		sendBlobsEnable = (sendBlobsEnable == true ? false : true);
 
-    	grayDiff.absDiff(grayCaptureImgSaved, grayCaptureImg);
-    	grayCaptureImgSaved = grayCaptureImg;
+        	gettimeofday(&now, NULL);
+        	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+        	ofLog(OF_LOG_NOTICE, "sendBlobsEnable = %d, time  = %4.3lf", sendBlobsEnable, timeNow);
+
+    		contourFinder.findContours(grayCaptureImg, MIN_AREA, MAX_AREA, 5, false);
+    		if (contourFinder.nBlobs)
+    			bUpdateBlobs = true;
+    	}
+    	// Using markers to get H1 and H2
+    	else {
+    		unsigned char * cpixels = captureVid.getPixels();
+    		int totalPixels = CAPWIDTH*CAPHEIGHT*3;
+    		for (int i = 0; i < totalPixels; i++)
+    			grayCaptureInvert[i] = 255 - cpixels[i];
+    		colorCaptureImg.setFromPixels(grayCaptureInvert, CAPWIDTH, CAPHEIGHT);
+    		grayCaptureImg = colorCaptureImg;
+    		grayCaptureImg.threshold(threshold);
+    		sendBlobsEnable = false;
+    		contourFinder.findContours(grayCaptureImg, MIN_AREA, MAX_AREA, 5, false);
+    		if (contourFinder.nBlobs)
+    			bUpdateBlobs = true;
+    	}
+
+
+    	// pixelOutput.loadData(grayCaptureInvert, CAPWIDTH,CAPHEIGHT, GL_RGB);
+
+    	// capture without marker
+    	if (bUpdateBackground == true) {
+    		grayCaptureImgSaved = grayCaptureImg;
+    		bUpdateBackground = false;
+    		ofLog(OF_LOG_NOTICE, ">>>>> update background");
+    	}
+
+    	// grayDiff.absDiff(grayCaptureImgSaved, grayCaptureImg);
+    	// grayCaptureImgSaved = grayCaptureImg;
 
     	// HUNG1 TEST case 3
     	// grabImg.setFromPixels(grayDiff.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_GRAYSCALE, true);
@@ -115,21 +153,26 @@ void picoApp::update()
 
     	// REF SAVE DIFF CAPTURE COLOR IMAGE
     	// grabImg.setFromPixels(grayDiff.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_GRAYSCALE, true);
-    	grabImg.setFromPixels(grayCaptureImg.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_GRAYSCALE, true);
-    	string fileName = "frame"+ofToString(nFrame)+".png";
-    	grabImg.saveImage(fileName);
 
+
+    	if (bSaveImage == true) {
+    		grabImg.setFromPixels(grayCaptureImg.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_GRAYSCALE, true);
+    		string fileName = "frame"+ofToString(nFrame)+".png";
+    		grabImg.saveImage(fileName);
+    		bSaveImage = false;
+    	    ofLog(OF_LOG_NOTICE, ">>>>> save frame %d \n", nFrame);
+    	}
 
     	nFrame ++;
 
-    	grayDiff.threshold(80);
-    	contourFinder.findContours(grayDiff, MIN_AREA, MAX_AREA, 20, false);
-    	if (contourFinder.nBlobs) {
-    		bUpdateBlobs = true;
-    	}
+    	// grayDiff.threshold(80);
+    	// contourFinder.findContours(grayDiff, MIN_AREA, MAX_AREA, 20, false);
+
+
+
 
     	// if (videoEnable == false)
-    	sendBlobsEnable = (sendBlobsEnable == true ? false : true);
+
 
     	gettimeofday(&now, NULL);
     	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
@@ -461,6 +504,17 @@ void picoApp::draw(){
 
     int nBlobs = contourFinder.nBlobs;
 
+    if (debug_flag == true) {
+		printf("\nFRAME[%d] %d blobs:", nFrame, nBlobs);
+    	for (i=0; i < nBlobs; i++) {
+   		    blobPosX[i] = contourFinder.blobs[i].centroid.x;
+   		    blobPosY[i]  = contourFinder.blobs[i].centroid.y;
+   		    blobPosA[i]  = contourFinder.blobs[i].area;
+   		    printf("(%d %d %d)",blobPosX[i],blobPosY[i],blobPosA[i]);
+        }
+   		printf("\n");
+   	}
+
     if (bUpdateBlobs) {
     	bUpdateBlobs = false;
 
@@ -484,13 +538,13 @@ void picoApp::draw(){
     			}
     		}
 
-    		if (updateMatrix == true) {
-    			printf("\nframe[%d]:", nFrame);
-    			for (i=0; i < nBlobs; i++) {
-    				printf("(%d %d %d)",blobPosX[i],blobPosY[i],blobPosA[i]);
-    			}
-    			printf("\n");
-    		}
+//    		if (updateMatrix == true) {
+//    			printf("\nframe[%d]:", nFrame);
+//    			for (i=0; i < nBlobs; i++) {
+//    				printf("(%d %d %d)",blobPosX[i],blobPosY[i],blobPosA[i]);
+//    			}
+//    			printf("\n");
+//    		}
 
     		for (i=0; i<nBlobs; i++) {
     			for (j=i+1; j<nBlobs; j++) {
@@ -516,13 +570,13 @@ void picoApp::draw(){
     			}
     		}
 
-    		if (updateMatrix == true) {
-        		printf("\nFRAME[%d]:", nFrame);
-        		for (i=0; i < nBlobs; i++) {
-        			printf("(%d %d)",blobPosX[i],blobPosY[i]);
-        		}
-        		printf("\n");
-        	}
+//    		if (debug_flag == true) {
+//        		printf("\nFRAME[%d]:", nFrame);
+//        		for (i=0; i < nBlobs; i++) {
+//        			printf("(%d %d %d)",blobPosX[i],blobPosY[i],blobPosA[i]);
+//        		}
+//        		printf("\n");
+//        	}
 
     		/* getMatrixDistance to determine updating the homography matrix */
     		float distance = 0.0;
@@ -533,18 +587,16 @@ void picoApp::draw(){
     		}
 
     		// if (distance < 1000 && updateMatrix == true) {
-    		if (updateMatrix == true) { // SKIP CHECKING DISTANCE
-    			printf("distance: %5.2f\n", distance);
-//    			printf("\nFRAME[%d]:", nFrame);
-    			for (i=0; i<nBlobs; i++) {
-    				blobPosSaved[i] = blobPos[i];
-    				printf("(%lf %lf)",blobPosSaved[i].x,blobPosSaved[i].y);
-    			}
-//    			printf("\n");
-    		}
-    		else {
-    			updateMatrix = false;
-       		}
+//    		if (updateMatrix == true) { // SKIP CHECKING DISTANCE
+//    			printf("distance: %5.2f\n", distance);
+//    			for (i=0; i<nBlobs; i++) {
+//    				blobPosSaved[i] = blobPos[i];
+//    				printf("(%lf %lf)",blobPosSaved[i].x,blobPosSaved[i].y);
+//    			}
+//    		}
+//    		else {
+//    			updateMatrix = false;
+//       		}
     	}
     	else {
     		updateMatrix = false;
@@ -559,31 +611,49 @@ void picoApp::draw(){
 		src[1].set(120,440);
 		src[2].set(560,40);
 		src[3].set(560,440);
-		dst[0].set(blobPosSaved[0].x,blobPosSaved[0].y);
-		dst[1].set(blobPosSaved[1].x,blobPosSaved[1].y);
-		dst[2].set(blobPosSaved[2].x,blobPosSaved[2].y);
-		dst[3].set(blobPosSaved[3].x,blobPosSaved[3].y);
-		// HUNG
+//		dst[0].set(blobPosSaved[0].x,blobPosSaved[0].y);
+//		dst[1].set(blobPosSaved[1].x,blobPosSaved[1].y);
+//		dst[2].set(blobPosSaved[2].x,blobPosSaved[2].y);
+//		dst[3].set(blobPosSaved[3].x,blobPosSaved[3].y);
+		dst[0].set(blobPos[0].x,blobPos[0].y);
+		dst[1].set(blobPos[1].x,blobPos[1].y);
+		dst[2].set(blobPos[2].x,blobPos[2].y);
+		dst[3].set(blobPos[3].x,blobPos[3].y);
+
+		// HUNG3
+		// update Href with generated blobs and capture images
 		if (updateHref == true) {
 			updateHref = false;
 			ofhref = getResyncHomography3x3(src,dst);
-			printf(">>>>>>>>>>>>> updated Href\n");
+			ofhrefinv = getResyncHomography3x3(dst,src);
+			validHref = true;
+			printf(">>>>>>>>>>>>> Href updated, press 1 to update Href, 2 to update H1\n");
+		}
+		else if (updateH1 == true) {
+			updateH1 = false;
+			ofh1inv = getResyncHomography3x3(dst,src);
+			validH1 = true;
+			printf(">>>>>>>>>>>>> H1 updated, press 1 to update Href, 2 to update H1\n");
 		}
 		else {
-			ofh1inv = getResyncHomography3x3(dst,src);
-			printf(">>>>>>>>>>>>> updated H1\n");
+			ofh2 = getResyncHomography3x3(src,dst);
 		}
-		Hc = ofh1inv*ofhref;
 
-		resyncMatrix[0] = Hc[0]; resyncMatrix[1] = Hc[1]; resyncMatrix[2] = 0; resyncMatrix[3] = Hc[2];
-		resyncMatrix[4] = Hc[3]; resyncMatrix[5] = Hc[4]; resyncMatrix[6] = 0; resyncMatrix[7] = Hc[5];
-		resyncMatrix[8] = 0;     resyncMatrix[9] = 0;     resyncMatrix[10]= 0; resyncMatrix[11] = 0;
-		resyncMatrix[12] = Hc[6];resyncMatrix[13] = Hc[7];resyncMatrix[14]= 0; resyncMatrix[15] = Hc[8];
+		// Hc = ofh1inv*ofhref;
+		if (validHref == true && validH1 == true) {
+			Hc = ofhrefinv*ofh2*ofh1inv*ofhref;
+
+			resyncMatrix[0] = Hc[0]; resyncMatrix[1] = Hc[1]; resyncMatrix[2] = 0; resyncMatrix[3] = Hc[2];
+			resyncMatrix[4] = Hc[3]; resyncMatrix[5] = Hc[4]; resyncMatrix[6] = 0; resyncMatrix[7] = Hc[5];
+			resyncMatrix[8] = 0;     resyncMatrix[9] = 0;     resyncMatrix[10]= 0; resyncMatrix[11] = 0;
+			resyncMatrix[12] = Hc[6];resyncMatrix[13] = Hc[7];resyncMatrix[14]= 0; resyncMatrix[15] = Hc[8];
+		}
 
 //		printf(">>>>>>>>>>>>> updated resyncMatrix = ");
-//		for (i=0; i<16; i++)
-//			printf("%4.2lf ", resyncMatrix[i]);
-//		printf("\n");
+		//for (i=0; i<16; i++)
+		//	printf("%4.2f ", resyncMatrix[i]);
+		//printf("\n");
+
 		// HUNG
     	struct timeval now;
 		gettimeofday(&now, NULL);
@@ -641,6 +711,11 @@ void picoApp::draw(){
     int VOFFSET = 20;
     int BLOBRADIUS = 10;
 
+// HUNG3
+// First, generate blobs to get Href
+// Second, use marker to get H1
+// Then get H2 to update for selfadjust
+#if 1
     ofFill();
     ofSetHexColor(0x000000);
     ofRect(HOFFSET,0,2*VOFFSET,2*VOFFSET);
@@ -655,6 +730,7 @@ void picoApp::draw(){
     	ofCircle(HOFFSET+VOFFSET,HEIGHT-VOFFSET,BLOBRADIUS);
     	ofCircle(WIDTH-HOFFSET-VOFFSET,HEIGHT-VOFFSET,BLOBRADIUS);
     }
+#endif
 
     gettimeofday(&now, NULL);
     timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
@@ -662,13 +738,15 @@ void picoApp::draw(){
 
     drawFrame ++;
 
-#if 1
-    stringstream info;
-    info <<"\n" << "output frame rate: " << ofGetFrameRate() << "drawFrame: " << drawFrame << "\n";
-    info << "Player: " << omxPlayer.getWidth() << "x" << omxPlayer.getHeight() << " @ "<< omxPlayer.getFPS() << "fps"<< "\n";
-    info << "Camera: " << captureVid.getWidth() << "x" << captureVid.getHeight() << " @ "<< captureVid.getFrameRate() << "fps"<< "\n";
-    ofDrawBitmapStringHighlight(info.str(), 60, 60, ofColor(ofColor::black, 90), ofColor::green);
-#endif
+    // HUNG3
+    if (show_debug_flag == true) {
+    	stringstream info;
+    	info <<"\n" << "output frame rate: " << ofGetFrameRate() << " drawFrame: " << drawFrame << "\n";
+    	info << "Player: " << omxPlayer.getWidth() << "x" << omxPlayer.getHeight() << " @ "<< omxPlayer.getFPS() << "fps"<< "\n";
+    	info << "Camera: " << captureVid.getWidth() << "x" << captureVid.getHeight() << " @ "<< captureVid.getFrameRate() << "fps"<< "\n";
+    	// ofDrawBitmapStringHighlight(info.str(), 60, 60, ofColor(ofColor::black, 90), ofColor::green);
+    	cout << info.str();
+    }
     
     /////////////////////////////////////////////
     // capture for testing only
@@ -3499,9 +3577,26 @@ void picoApp::keyPressed(int key) {
 	ofLog(OF_LOG_VERBOSE, "%c keyPressed", key);
 
 	switch (key) {
-		case 'r':
+		case '1':
+		bUpdateBlobs = false; // HUNG3
+		updateMatrix = false;
 		updateHref = true;
-		ofLog(OF_LOG_VERBOSE, ">>>>> lock position", key);
+		break;
+
+		case '2':
+		updateH1 = true;
+		updateMatrix = false;
+		bUpdateBlobs = false;
+		break;
+
+		case 'd':
+		debug_flag = (debug_flag == true ? false : true);
+		printf("toggle debug_flag, current debug = %d\n", debug_flag);
+		break;
+
+		case 'r':
+		show_debug_flag = (show_debug_flag == true ? false : true);
+		printf("toggle show_debug_flag, current debug = %d\n", show_debug_flag);
 		break;
 
 		case 'p':
@@ -3509,15 +3604,26 @@ void picoApp::keyPressed(int key) {
 		omxPlayer.togglePause();
 		break;
 
+		// HUNG STUPID
+		case ' ':
+		bUpdateBackground = true;
+		break;
+
+		case 's':
+		bSaveImage = true;
+		break;
+
 		case '+':
+		case '=':
     	threshold ++;
-		if (threshold > 255) threshold = 255;
+		if (threshold > 250) threshold = 255;
+		else threshold = threshold + 5;
 		printf("threshold increased to %d\n", threshold);
 		break;
 
 		case '-':
-		threshold --;
-		if (threshold < 0) threshold = 0;
+		if (threshold < 5) threshold = 0;
+		else threshold = threshold - 5;
 		printf("threshold decreased to %d\n", threshold);
 	    break;
 

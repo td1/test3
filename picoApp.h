@@ -97,9 +97,9 @@ static int myboardID;
 #endif
 
 // RESYNC
-#define MIN_AREA		5    	// BLOB SIZE MIN DETECTION
-#define MAX_AREA   		200 	// BLOB SIZE MAX DETECTION
-#define FRAME_RATE		30  	// RESYNC FRAME RATE
+#define MIN_AREA		50    	// BLOB SIZE MIN DETECTION
+#define MAX_AREA   		300 	// BLOB SIZE MAX DETECTION
+#define FRAME_RATE		30		// HUNG3 set frame rate to 1 to debug 30  	// RESYNC FRAME RATE
 #define CAPWIDTH		640		// RESYNC CAPTURE WIDTH
 #define CAPHEIGHT		480 	// RESYNC CAPTURE HEIGHT
 
@@ -153,10 +153,15 @@ public:
 	ofxCvGrayscaleImage 	grayCaptureImgSaved;
 	ofxCvGrayscaleImage 	grayDiff;
 
+	unsigned char * 		grayCaptureInvert;
+
 	ofxCvContourFinder 		contourFinder;
 
 	int 					threshold;
+
 	bool					bUpdateBackground;
+	bool					bSaveImage;
+
 	bool 					bProjectBlobs;
 	bool					bUpdateBlobs;
 
@@ -215,13 +220,22 @@ public:
 
 	bool updateMatrix;
 	bool updatedMatrix;
+
 	bool updateHref;
+	bool updateH1;
+	bool validHref;
+	bool validH1;
+
+	bool debug_flag;
+	bool show_debug_flag;
 
 	ofMatrix3x3 ofh1;
 	ofMatrix3x3 ofh1inv;
 	ofMatrix3x3 ofh2inv;
 	ofMatrix3x3 ofh2;
+
 	ofMatrix3x3 ofhref;
+	ofMatrix3x3 ofhrefinv;
 
 	ofMatrix3x3 ofo2;
 	ofMatrix3x3 Hc;
