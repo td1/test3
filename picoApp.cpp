@@ -12,6 +12,7 @@ void picoApp::setup()
     // string videoPath = ofToDataPath("../../../video/grid_640x480.mp4", true);
     string videoPath = ofToDataPath("../../../video/window_640x480.mp4", true);
 
+#if ENABLE_OMXPLAYER
     omxPlayer.loadMovie(videoPath); 
     width = omxPlayer.getWidth();
     height = omxPlayer.getHeight();
@@ -19,7 +20,18 @@ void picoApp::setup()
     if (width != WIDTH || height != HEIGHT) {
     	ofLog(OF_LOG_NOTICE,"change to use width=%d, height=%d instead default values\n", width, height);
     }    
-        
+#else
+    gpixels = new unsigned char[CAPWIDTH*CAPHEIGHT];
+    for (int i=WIDTH/4; i<WIDTH*3/4; i++) {
+    	for (int j=HEIGHT/4; j<HEIGHT*3/4; j++) {
+    		// gpixels[j*WIDTH+i+0] = 40;
+    		// gpixels[j*WIDTH+i+1] = 40;
+    		// gpixels[j*WIDTH+i+2] = 40;
+    		gpixels[j*WIDTH+i] = 40;
+    	}
+    }
+#endif
+
     ofBackground(0,0,0);
     consoleListener.setup(this);
     ofSetFrameRate(FRAME_RATE); // HUNG3 FRAME RATE 5, 1 to debug
@@ -32,9 +44,16 @@ void picoApp::setup()
     captureConfig.enablePixels = true;
 	
     captureVid.setup(captureConfig);
+
+#ifdef ENABLE_OMXPLAYER
 	if (!pixelOutput.isAllocated()) {
 	    pixelOutput.allocate(width, height, GL_RGBA); 
 	}
+#else
+	if (!pixelOutput.isAllocated()) {
+	    pixelOutput.allocate(WIDTH, HEIGHT, GL_LUMINANCE);
+	}
+#endif
 	
     colorCaptureImg.allocate(CAPWIDTH,CAPHEIGHT);
     colorCaptureImgSaved.allocate(CAPWIDTH,CAPHEIGHT);
@@ -79,20 +98,33 @@ void picoApp::update()
 	struct timeval now;
 	double timeNow;
 
-	gettimeofday(&now, NULL);
-	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
-	// ofLog(OF_LOG_NOTICE, "update start  = %1.3lf", timeNow);
+	// HUNG5 check new timing
+	if (debug_flag == true) {
+		gettimeofday(&now, NULL);
+		timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+		ofLog(OF_LOG_NOTICE, "%4.3lf 1. update start", timeNow - prevTime);
+		prevTime = timeNow;
+	}
 
+#ifdef ENABLE_OMXPLAYER
     omxPlayer.updatePixels();
+#endif
+
     bool bNewFrame = false;
     ofBackground(0,0,0);
     bNewFrame = captureVid.isFrameNew();
 
     if (bNewFrame) {
 
-    	gettimeofday(&now, NULL);
-    	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
-    	// ofLog(OF_LOG_NOTICE, "capture time  = %4.3lf", timeNow);
+    	nFrame ++;
+
+    	// HUNG5 check new timing
+    	if (debug_flag == true) {
+    		gettimeofday(&now, NULL);
+    		timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+    		ofLog(OF_LOG_NOTICE, "%4.3lf 2. new frame %d", timeNow - prevTime, nFrame);
+    		prevTime = timeNow;
+    	}
 
     	// HUNG1
     	// SAVE IMAGES FOR DEBUG
@@ -131,7 +163,8 @@ void picoApp::update()
     				for (int i = 0; i < CAPWIDTH; i++) {
     					for (int j = 0; j < CAPHEIGHT; j++) {
     						int k = j*CAPWIDTH+i+0;
-    						if (cpixels[k+1] > threshold_green) {
+    						if (cpixels[k+2] > threshold_green) {
+    							ofLog(OF_LOG_NOTICE, "detected blue = %d", cpixels[k+2]);
     							grayCaptureInvert[k] = 255;
     							grayCaptureInvert[k+1] = 255;
     							grayCaptureInvert[k+2] = 255;
@@ -185,21 +218,14 @@ void picoApp::update()
     	    ofLog(OF_LOG_NOTICE, ">>>>> save frame %d \n", nFrame);
     	}
 
-    	nFrame ++;
+    	// HUNG5 check new timing
+        if (debug_flag == true) {
+        	gettimeofday(&now, NULL);
+        	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+        	ofLog(OF_LOG_NOTICE, "%4.3lf 3. update stop", timeNow - prevTime);
+        	prevTime = timeNow;
+    	}
 
-    	// grayDiff.threshold(80);
-    	// contourFinder.findContours(grayDiff, MIN_AREA, MAX_AREA, 20, false);
-
-
-
-
-    	// if (videoEnable == false)
-
-
-    	gettimeofday(&now, NULL);
-    	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
-    	// ofLog(OF_LOG_NOTICE, "capture stop  = %4.3lf", timeNow);
-//    	}
     }
 }
 
@@ -520,21 +546,34 @@ void picoApp::draw(){
     int blobPosY[8];
     int blobPosA[8];
 
-    gettimeofday(&now, NULL);
-    timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
-    // ofLog(OF_LOG_NOTICE, "draw start    = %4.3lf", timeNow);
+    // HUNG5 check new timing
+    if (debug_flag == true) {
+        gettimeofday(&now, NULL);
+        timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+        ofLog(OF_LOG_NOTICE, "%4.3lf 4. draw start", timeNow - prevTime);
+        prevTime = timeNow;
+    }
 
     int nBlobs = contourFinder.nBlobs;
 
+    // HUNG5 check new timing
     if (debug_flag == true) {
-		printf("\nFRAME[%d] %d blobs:", nFrame, nBlobs);
+		// printf("\nFRAME[%d] %d blobs:", nFrame, nBlobs);
     	for (i=0; i < nBlobs; i++) {
    		    blobPosX[i] = contourFinder.blobs[i].centroid.x;
    		    blobPosY[i]  = contourFinder.blobs[i].centroid.y;
    		    blobPosA[i]  = contourFinder.blobs[i].area;
-   		    printf("(%d %d %d)",blobPosX[i],blobPosY[i],blobPosA[i]);
+   		    // printf("(%d %d %d)",blobPosX[i],blobPosY[i],blobPosA[i]);
+
+   		    // HUNG5 check new timing
+   		    if (debug_flag == true) {
+   		        gettimeofday(&now, NULL);
+   		        timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+   		        ofLog(OF_LOG_NOTICE, "%4.3lf 5. (%d %d %d)", timeNow - prevTime, blobPosX[i],blobPosY[i],blobPosA[i]);
+   		        prevTime = timeNow;
+   		    }
         }
-   		printf("\n");
+   		// printf("\n");
    	}
 
     if (bUpdateBlobs) {
@@ -625,8 +664,12 @@ void picoApp::draw(){
     	}
     }
 
+#ifdef ENABLE_OMXPLAYER
     unsigned char *pixels = omxPlayer.getPixels();
     nChannels = 4;
+#else
+    // using gpixels
+#endif
 
 	if (updateMatrix == true) {
 		src[0].set(120,40);
@@ -676,13 +719,14 @@ void picoApp::draw(){
 		//	printf("%4.2f ", resyncMatrix[i]);
 		//printf("\n");
 
-		// HUNG
-    	struct timeval now;
-		gettimeofday(&now, NULL);
-    	double timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
-    	// ofLog(OF_LOG_NOTICE, "update MATRIX at %4.3lf", timeNow);
-
-		updateMatrix = false;
+		// HUNG5 check new timing
+		if (debug_flag == true) {
+		    gettimeofday(&now, NULL);
+		    timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+		    ofLog(OF_LOG_NOTICE, "%4.3lf 6. update MATRIX", timeNow - prevTime);
+		    prevTime = timeNow;
+		}
+    	updateMatrix = false;
 	}
 
     //unsigned char *capPixels = captureVid.getPixels(); // NOTE: getPixels at draw first, should be at update
@@ -708,17 +752,17 @@ void picoApp::draw(){
     // captureImg.draw(0,0,640,480);
     // contourFinder.draw(0,0,640,480);
 
-#if 1 // WORKING DISPLAY omxplayer
+#ifdef ENABLE_OMXPLAYER
     pixelOutput.loadData(pixels, width, height, GL_RGBA);
+#else
+    pixelOutput.loadData(gpixels, WIDTH, HEIGHT, GL_LUMINANCE);
+#endif
     updatedMatrix = false;
     glPushMatrix();
     glMultMatrixf(resyncMatrix);
     glTranslatef(0,0,0);
     pixelOutput.draw(0, 0, 640, 480); 
     glPopMatrix();
-#endif
-
-// #endif // OMX_CAMERA
 
 #if NO_HOMOGRAPHY_TRANFORM
     unsigned char *pixels = omxPlayer.getPixels();
@@ -754,8 +798,8 @@ void picoApp::draw(){
     }
 #endif
 
-    gettimeofday(&now, NULL);
-    timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+    // gettimeofday(&now, NULL);
+    // timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
     // ofLog(OF_LOG_NOTICE, "send %d Blob   = %4.3lf", sendBlobsEnable, timeNow);
 
     drawFrame ++;
@@ -795,7 +839,13 @@ void picoApp::draw(){
     // string fileName = "frame"+ofToString(nFrame)+".png";
     // grabImg.saveImage(fileName);
 
-
+    // HUNG5 check new timing
+    if (debug_flag == true) {
+        gettimeofday(&now, NULL);
+    	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+    	ofLog(OF_LOG_NOTICE, "%4.3lf 7. draw exit", timeNow - prevTime);
+        prevTime = timeNow;
+    }
 
 }
 

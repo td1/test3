@@ -37,6 +37,9 @@ extern "C" {
 // #define TEST_RESYNC_CAPTURE					1
 // #define OMX_CAMERA							1
 
+// add this switch to test disable OMXPLAYER
+// #define ENABLE_OMXPLAYER						1
+
 /* DEBUG/TEST SWITCH */
 #define DEBUG_HOMOGRAPHY               		1
 //#define OUTPUT_RES_1280_720             1
@@ -245,6 +248,8 @@ public:
     ofVec2f blobPos[8];
     ofVec2f blobPosSaved[8];
 
+    double prevTime;
+    unsigned char * 		gpixels;
 
 };
 
