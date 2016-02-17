@@ -50,6 +50,7 @@ void picoApp::setup()
     ofo2.set(1,0,640,0,1,0,0,0,1);
     // initially threshold value, adjust by +/- key
 	threshold = 180;
+	threshold_green = 40;
     ofHideCursor();
     sendBlobsEnable = false;
     bUpdateBackground = true;
@@ -118,9 +119,30 @@ void picoApp::update()
     	// Using markers to get H1 and H2
     	else {
     		unsigned char * cpixels = captureVid.getPixels();
-    		int totalPixels = CAPWIDTH*CAPHEIGHT*3;
-    		for (int i = 0; i < totalPixels; i++)
-    			grayCaptureInvert[i] = 255 - cpixels[i];
+    		
+    		switch (marker_type) {
+    			case 0: // BLACK
+    				for (int i = 0; i < CAPWIDTH*CAPHEIGHT*3; i++)
+    					grayCaptureInvert[i] = 255 - cpixels[i];
+    				break;
+
+    			case 1: // GREEN
+    				// detect GREEN only
+    				for (int i = 0; i < CAPWIDTH; i++) {
+    					for (int j = 0; j < CAPHEIGHT; j++) {
+    						int k = j*CAPWIDTH+i+0;
+    						if (cpixels[k+1] > threshold_green) {
+    							grayCaptureInvert[k] = 255;
+    							grayCaptureInvert[k+1] = 255;
+    							grayCaptureInvert[k+2] = 255;
+    						}
+    					}
+    				}
+    				break;
+
+    			default:;
+    		}
+
     		colorCaptureImg.setFromPixels(grayCaptureInvert, CAPWIDTH, CAPHEIGHT);
     		grayCaptureImg = colorCaptureImg;
     		grayCaptureImg.threshold(threshold);
@@ -490,7 +512,7 @@ void picoApp::draw(){
     }
 #endif
 
-#if OMX_CAMERA
+// #if OMX_CAMERA
     // DRAW
     int varx = 0;
     int vary = 0;
@@ -696,7 +718,7 @@ void picoApp::draw(){
     glPopMatrix();
 #endif
 
-#endif // OMX_CAMERA
+// #endif // OMX_CAMERA
 
 #if NO_HOMOGRAPHY_TRANFORM
     unsigned char *pixels = omxPlayer.getPixels();
@@ -3594,6 +3616,11 @@ void picoApp::keyPressed(int key) {
 		printf("toggle debug_flag, current debug = %d\n", debug_flag);
 		break;
 
+		case 't':
+		marker_type = (marker_type == 0 ? 1 : 0);
+		printf("toggle marker_type, marker_color = %d\n", marker_type);
+		break;
+
 		case 'r':
 		show_debug_flag = (show_debug_flag == true ? false : true);
 		printf("toggle show_debug_flag, current debug = %d\n", show_debug_flag);
@@ -3615,7 +3642,7 @@ void picoApp::keyPressed(int key) {
 
 		case '+':
 		case '=':
-    	threshold ++;
+    	        threshold ++;
 		if (threshold > 250) threshold = 255;
 		else threshold = threshold + 5;
 		printf("threshold increased to %d\n", threshold);
@@ -3625,8 +3652,20 @@ void picoApp::keyPressed(int key) {
 		if (threshold < 5) threshold = 0;
 		else threshold = threshold - 5;
 		printf("threshold decreased to %d\n", threshold);
-	    break;
+	        break;
 
+		case '0':
+    	        threshold_green ++;
+		if (threshold_green > 254) threshold_green = 255;
+		else threshold_green = threshold_green + 1;
+		printf("increase threshold_green to %d\n", threshold_green);
+		break;
+
+		case '9':
+		if (threshold_green < 1) threshold_green = 0;
+		else threshold_green = threshold_green - 1;
+		printf("decreased threshold_green to %d\n", threshold_green);
+	        break;
 		default:;
 	}
 }

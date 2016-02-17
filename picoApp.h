@@ -35,7 +35,7 @@ extern "C" {
 
 // #define TEST_RESYNC_HOMOGRAPHY				1
 // #define TEST_RESYNC_CAPTURE					1
-#define OMX_CAMERA							1
+// #define OMX_CAMERA							1
 
 /* DEBUG/TEST SWITCH */
 #define DEBUG_HOMOGRAPHY               		1
@@ -97,8 +97,8 @@ static int myboardID;
 #endif
 
 // RESYNC
-#define MIN_AREA		50    	// BLOB SIZE MIN DETECTION
-#define MAX_AREA   		300 	// BLOB SIZE MAX DETECTION
+#define MIN_AREA		30    	// BLOB SIZE MIN DETECTION
+#define MAX_AREA   		500 	// BLOB SIZE MAX DETECTION
 #define FRAME_RATE		30		// HUNG3 set frame rate to 1 to debug 30  	// RESYNC FRAME RATE
 #define CAPWIDTH		640		// RESYNC CAPTURE WIDTH
 #define CAPHEIGHT		480 	// RESYNC CAPTURE HEIGHT
@@ -136,11 +136,11 @@ public:
 
 	ofTexture 				pixelOutput;
         
-#if OMX_CAMERA
+//#if OMX_CAMERA
 	ofxOMXCapture           captureVid;
 	OMXCaptureConfig    	captureConfig;
 	ofImage					grabImg;
-#endif
+//#endif
 
 #if RESYNC | TEST_RESYNC_CAPTURE
 	ofVideoGrabber 			captureVid;
@@ -158,6 +158,8 @@ public:
 	ofxCvContourFinder 		contourFinder;
 
 	int 					threshold;
+	int 					threshold_green;
+	int 					marker_type;
 
 	bool					bUpdateBackground;
 	bool					bSaveImage;
