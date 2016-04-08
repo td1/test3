@@ -170,6 +170,9 @@ public:
 	bool 					bProjectBlobs;
 	bool					bUpdateBlobs;
 
+	bool                    bLocalSearch;
+	int                     localPoint[2][4];
+
 	bool startPlayVideo;
 	int width, height;
 	char matrixFN[30];

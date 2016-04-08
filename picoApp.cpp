@@ -6,7 +6,7 @@ void picoApp::setup()
     ofSetLogLevel(OF_LOG_VERBOSE);
     ofSetLogLevel("ofThread", OF_LOG_WARNING);
 
-    printf("SELF ADJUSTING PROJECTED VIDEO\n");
+    printf("SELF ADJUSTING PROJECTOR WITH MARKER ASSITED\n");
 
     startPlayVideo = false;
     // string videoPath = ofToDataPath("../../../video/grid_640x480.mp4", true);
@@ -34,12 +34,12 @@ void picoApp::setup()
 
     ofBackground(0,0,0);
     consoleListener.setup(this);
-    ofSetFrameRate(FRAME_RATE); // HUNG3 FRAME RATE 5, 1 to debug
+    ofSetFrameRate(FRAME_RATE);
     ofSetVerticalSync(true);
 
     captureConfig.width = CAPWIDTH;
     captureConfig.height = CAPHEIGHT;
-    captureConfig.framerate = FRAME_RATE; // HUNG3 FRAME RATE 5, 1 to debug
+    captureConfig.framerate = FRAME_RATE;
     captureConfig.isUsingTexture = true;
     captureConfig.enablePixels = true;
 	
@@ -63,7 +63,7 @@ void picoApp::setup()
     grayCaptureImgSaved.allocate(CAPWIDTH,CAPHEIGHT);
     grayDiff.allocate(CAPWIDTH,CAPHEIGHT);
 
-    grabImg.allocate(CAPWIDTH,CAPHEIGHT,OF_IMAGE_GRAYSCALE); // HUNG1
+    grabImg.allocate(CAPWIDTH,CAPHEIGHT,OF_IMAGE_GRAYSCALE);
     grayCaptureInvert = new unsigned char[CAPWIDTH*CAPHEIGHT*3];
 
     ofo2.set(1,0,640,0,1,0,0,0,1);
@@ -83,7 +83,6 @@ void picoApp::setup()
     resyncMatrix[8] = 0; resyncMatrix[9] = 0; resyncMatrix[10]= 1; resyncMatrix[11]= 0;
     resyncMatrix[12]= 0; resyncMatrix[13]= 0; resyncMatrix[14]= 0; resyncMatrix[15]= 1;
 
-    // HUNG3
     updateHref = false;
     validHref = false;
     updateH1 = false;
@@ -91,6 +90,8 @@ void picoApp::setup()
 
     debug_flag = false;
     show_debug_flag = false;
+
+    bLocalSearch = false;
 }
 
 void picoApp::update()
@@ -98,7 +99,6 @@ void picoApp::update()
 	struct timeval now;
 	double timeNow;
 
-	// HUNG5 check new timing
 	if (debug_flag == true) {
 		gettimeofday(&now, NULL);
 		timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
@@ -118,7 +118,6 @@ void picoApp::update()
 
     	nFrame ++;
 
-    	// HUNG5 check new timing
     	if (debug_flag == true) {
     		gettimeofday(&now, NULL);
     		timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
@@ -126,13 +125,11 @@ void picoApp::update()
     		prevTime = timeNow;
     	}
 
-    	// HUNG1
     	// SAVE IMAGES FOR DEBUG
     	// string fileName = "frame"+ofToString(nFrame)+".png";
     	// case2 grabImg.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_COLOR, true);
     	//       grabImg.saveImage(fileName);
 
-    	// HUNG3
     	// Using generated white blobs to get Href
     	if (updateHref == true) {
     		colorCaptureImg.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT);
@@ -153,25 +150,124 @@ void picoApp::update()
     		unsigned char * cpixels = captureVid.getPixels();
     		
     		switch (marker_type) {
-    			case 0: // BLACK
-    				for (int i = 0; i < CAPWIDTH*CAPHEIGHT*3; i++)
-    					grayCaptureInvert[i] = 255 - cpixels[i];
-    				break;
 
-    			case 1: // GREEN
+
+    			case 0: // GREEN
+
+// HUNG1 DEBUG 04/07/2016
+#if 1
+    				colorCaptureImgSaved.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT);
+		    		grayCaptureImgSaved = colorCaptureImgSaved;
+
+// DISPLAY 10 pixels at corner
+//    				for (int i = 0; i < CAPWIDTH*CAPHEIGHT*3; i++)
+//    			    	grayCaptureInvert[i] = 255 - cpixels[i];
+
+//    			    system("clear");
+//    			    printf("\n\n\n\n\n");
+//    			    for (int i = 0; i < 10; i++) {
+//    			        for (int j = 0; j < 10; j++) {
+//    			        	int k = (j*10+i)*3;
+//    			        	printf("(%3d %3d %3d)", cpixels[k], cpixels[k+1], cpixels[k+2]);
+//    			        }
+//    			        printf("\n");
+//    			    }
+
+		    		// system("clear");
+		    		// HUNG1
+		    		if (bLocalSearch == false) {
+		    			int indx[50];
+		    			int indy[50];
+		    			int cntx = 0;
+		    			int cnty = 0;
+		    			int px = 0;
+		    			int py = 0;
+
+		    			for (int j = 0; j < CAPHEIGHT; j++) {
+		    				cntx = 0;
+		    				for (int i = 0; i < CAPWIDTH; i++) {
+		    					int k = (j*CAPWIDTH+i)*3;
+		    					// search for red dot
+		    					if (cpixels[k] > 1.3*cpixels[k+1] && cpixels[k] > 1.3*cpixels[k+2] && cpixels[k] > 50) {
+		    						cntx ++;
+		    						grayCaptureInvert[k]=grayCaptureInvert[k+1]=grayCaptureInvert[k+2]=255;
+		    						// printf("r[%d %d]=(%d,%d %d) ", i, j, cpixels[k], cpixels[k+1], cpixels[k+2]);
+		    					}
+		    					else {
+		    						if (cntx > 5 && cntx < 50) {
+		    							indx[cnty] = i-1-cntx/2;
+		    							indy[cnty] = j;
+		    							// printf("%d[%d %d] ", cnty, indx[cnty], indy[cnty]);
+		    							if (cnty < 50) {
+		    								cnty ++;
+		    							}
+		    							else {
+		    								printf("too many points\n");
+		    								break;
+		    							}
+		    						}
+		    						cntx = 0;
+		    						grayCaptureInvert[k]=grayCaptureInvert[k+1]=grayCaptureInvert[k+2]=0;
+		    					}
+		    				}
+		    			}
+
+		    			// results
+		    			if (cnty > 0) {
+		    				for (int i=0; i<cnty; i++) {
+		    					printf("[%d %d]", indx[i], indy[i]);
+		    					px += indx[i];
+		    					py += indy[i];
+		    				}
+		    				printf("\ncenter = [%d %d]\n", px/cnty, py/cnty);
+		    			}
+					}
+    			    break;
+
+
+//    				for (int i = 0; i < 10; i++) {
+//    					for (int j = 0; j < 10; j++) {
+//    	    				int k = (j*10+i)*3;
+//    	    				printf("%d %d %d ", cpixels[k], cpixels[k+1], cpixels[k+2]);
+//    	    				if (cpixels[k+1] > (cpixels[k]+cpixels[k+2])) {
+//    	    					printf(" DETG ");
+//    	    				}
+//    					}
+//    	    			printf("\n");
+//    	    		}
+
+//    				for (int i = 0; i < CAPWIDTH; i++) {
+//    		    		for (int j = 0; j < CAPHEIGHT; j++) {
+//    		    			int k = (j*CAPWIDTH+i)*3;
+//    		    			// if (cpixels[k+1] > (cpixels[k]+cpixels[k+2])) {
+//    		    			//	printf("g[%d %d]=(%d %d %d) ", i, j, cpixels[k], cpixels[k+1], cpixels[k+2]);
+//    		    			//}
+//    		    				grayCaptureInvert[i] = 255 - cpixels[i];
+//    		    		}
+//    				}
+
+#else
     				// detect GREEN only
     				for (int i = 0; i < CAPWIDTH; i++) {
     					for (int j = 0; j < CAPHEIGHT; j++) {
-    						int k = j*CAPWIDTH+i+0;
-    						if (cpixels[k+2] > threshold_green) {
-    							ofLog(OF_LOG_NOTICE, "detected blue = %d", cpixels[k+2]);
+    						int k = (j*CAPWIDTH+i)*3;
+    						// printf("%d %d %d ", cpixels[k], cpixels[k+1], cpixels[k+2]);
+    						// if (cpixels[k+1] > threshold_green) {
+    						if (cpixels[k+1] > (cpixels[k]+cpixels[k+2])) {
     							grayCaptureInvert[k] = 255;
     							grayCaptureInvert[k+1] = 255;
     							grayCaptureInvert[k+2] = 255;
     						}
     					}
+    					printf("\n");
     				}
+#endif
     				break;
+
+    			case 1: // BLACK
+    			    for (int i = 0; i < CAPWIDTH*CAPHEIGHT*3; i++)
+    			    	grayCaptureInvert[i] = 255 - cpixels[i];
+    			    break;
 
     			default:;
     		}
@@ -198,7 +294,6 @@ void picoApp::update()
     	// grayDiff.absDiff(grayCaptureImgSaved, grayCaptureImg);
     	// grayCaptureImgSaved = grayCaptureImg;
 
-    	// HUNG1 TEST case 3
     	// grabImg.setFromPixels(grayDiff.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_GRAYSCALE, true);
 
     	// REF SAVE CAPTURE COLOR IMAGE
@@ -218,8 +313,7 @@ void picoApp::update()
     	    ofLog(OF_LOG_NOTICE, ">>>>> save frame %d \n", nFrame);
     	}
 
-    	// HUNG5 check new timing
-        if (debug_flag == true) {
+    	if (debug_flag == true) {
         	gettimeofday(&now, NULL);
         	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
         	ofLog(OF_LOG_NOTICE, "%4.3lf 3. update stop", timeNow - prevTime);
@@ -546,7 +640,6 @@ void picoApp::draw(){
     int blobPosY[8];
     int blobPosA[8];
 
-    // HUNG5 check new timing
     if (debug_flag == true) {
         gettimeofday(&now, NULL);
         timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
@@ -556,7 +649,6 @@ void picoApp::draw(){
 
     int nBlobs = contourFinder.nBlobs;
 
-    // HUNG5 check new timing
     if (debug_flag == true) {
 		// printf("\nFRAME[%d] %d blobs:", nFrame, nBlobs);
     	for (i=0; i < nBlobs; i++) {
@@ -565,7 +657,6 @@ void picoApp::draw(){
    		    blobPosA[i]  = contourFinder.blobs[i].area;
    		    // printf("(%d %d %d)",blobPosX[i],blobPosY[i],blobPosA[i]);
 
-   		    // HUNG5 check new timing
    		    if (debug_flag == true) {
    		        gettimeofday(&now, NULL);
    		        timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
@@ -685,7 +776,6 @@ void picoApp::draw(){
 		dst[2].set(blobPos[2].x,blobPos[2].y);
 		dst[3].set(blobPos[3].x,blobPos[3].y);
 
-		// HUNG3
 		// update Href with generated blobs and capture images
 		if (updateHref == true) {
 			updateHref = false;
@@ -719,7 +809,6 @@ void picoApp::draw(){
 		//	printf("%4.2f ", resyncMatrix[i]);
 		//printf("\n");
 
-		// HUNG5 check new timing
 		if (debug_flag == true) {
 		    gettimeofday(&now, NULL);
 		    timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
@@ -747,7 +836,7 @@ void picoApp::draw(){
     grayDiff.draw(0,240,320,240);
     contourFinder.draw(320,240,320,240);
 #endif
-    // HUNG2
+
     // Display captureImg for debug
     // captureImg.draw(0,0,640,480);
     // contourFinder.draw(0,0,640,480);
@@ -757,12 +846,24 @@ void picoApp::draw(){
 #else
     pixelOutput.loadData(gpixels, WIDTH, HEIGHT, GL_LUMINANCE);
 #endif
+
+// HUNG1 DEBUG ONLY
+#if 1
+    // colorCaptureImg.draw(0,0,640,480); no video?
+    // captureVid.draw(); yes
+    grayCaptureImg.draw(0,0,320,240);
+    contourFinder.draw(320,0,320,240);
+    colorCaptureImgSaved.draw(0,240,320,240);
+    grayCaptureImgSaved.draw(320,240,320,240);
+
+#else
     updatedMatrix = false;
     glPushMatrix();
     glMultMatrixf(resyncMatrix);
     glTranslatef(0,0,0);
     pixelOutput.draw(0, 0, 640, 480); 
     glPopMatrix();
+#endif
 
 #if NO_HOMOGRAPHY_TRANFORM
     unsigned char *pixels = omxPlayer.getPixels();
@@ -777,7 +878,6 @@ void picoApp::draw(){
     int VOFFSET = 20;
     int BLOBRADIUS = 10;
 
-// HUNG3
 // First, generate blobs to get Href
 // Second, use marker to get H1
 // Then get H2 to update for selfadjust
@@ -804,7 +904,6 @@ void picoApp::draw(){
 
     drawFrame ++;
 
-    // HUNG3
     if (show_debug_flag == true) {
     	stringstream info;
     	info <<"\n" << "output frame rate: " << ofGetFrameRate() << " drawFrame: " << drawFrame << "\n";
@@ -834,12 +933,10 @@ void picoApp::draw(){
     grabImg.saveImage(fileName);
 #endif
 
-    // HUNG1
     // grabImg.grabScreen(0,0,640,480);
     // string fileName = "frame"+ofToString(nFrame)+".png";
     // grabImg.saveImage(fileName);
 
-    // HUNG5 check new timing
     if (debug_flag == true) {
         gettimeofday(&now, NULL);
     	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
@@ -3650,7 +3747,7 @@ void picoApp::keyPressed(int key) {
 
 	switch (key) {
 		case '1':
-		bUpdateBlobs = false; // HUNG3
+		bUpdateBlobs = false;
 		updateMatrix = false;
 		updateHref = true;
 		break;
@@ -3681,7 +3778,6 @@ void picoApp::keyPressed(int key) {
 		omxPlayer.togglePause();
 		break;
 
-		// HUNG STUPID
 		case ' ':
 		bUpdateBackground = true;
 		break;
