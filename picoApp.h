@@ -101,7 +101,7 @@ static int myboardID;
 
 // RESYNC
 #define MIN_AREA		30    	// BLOB SIZE MIN DETECTION
-#define MAX_AREA   		500 	// BLOB SIZE MAX DETECTION
+#define MAX_AREA   		300 	// BLOB SIZE MAX DETECTION
 #define FRAME_RATE		30		// HUNG3 set frame rate to 1 to debug 30  	// RESYNC FRAME RATE
 #define CAPWIDTH		640		// RESYNC CAPTURE WIDTH
 #define CAPHEIGHT		480 	// RESYNC CAPTURE HEIGHT
@@ -234,8 +234,11 @@ public:
 	bool validHref;
 	bool validH1;
 
-	bool debug_flag;
 	bool show_debug_flag;
+	bool debug1_flag;
+	bool debug2_flag;
+	bool debug3_flag;
+	bool debug4_flag;
 
 	ofMatrix3x3 ofh1;
 	ofMatrix3x3 ofh1inv;
@@ -253,6 +256,12 @@ public:
 
     double prevTime;
     unsigned char * 		gpixels;
+
+    int refR;
+    int refG;
+    int refB;
+    int blx[4];
+    int bly[4];
 
 };
 

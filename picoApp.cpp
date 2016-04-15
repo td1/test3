@@ -88,7 +88,10 @@ void picoApp::setup()
     updateH1 = false;
     validH1 = false;
 
-    debug_flag = false;
+    debug1_flag = false;
+    debug2_flag = false;
+    debug3_flag = false;
+    debug4_flag = false;
     show_debug_flag = false;
 
     bLocalSearch = false;
@@ -99,12 +102,14 @@ void picoApp::update()
 	struct timeval now;
 	double timeNow;
 
-	if (debug_flag == true) {
+#if CHECK_TIMING
+	if (debug1_flag == true) {
 		gettimeofday(&now, NULL);
 		timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
 		ofLog(OF_LOG_NOTICE, "%4.3lf 1. update start", timeNow - prevTime);
 		prevTime = timeNow;
 	}
+#endif
 
 #ifdef ENABLE_OMXPLAYER
     omxPlayer.updatePixels();
@@ -116,14 +121,36 @@ void picoApp::update()
 
     if (bNewFrame) {
 
+    	/* get reference values for adapting to the environment */
+    	if (nFrame == 0 || bUpdateBackground == true) {
+    		bUpdateBackground = false;
+
+    		unsigned char * cpixels = captureVid.getPixels();
+    		refR = refG =refB = 0;
+    		for (int i = 0; i < CAPWIDTH; i++) {
+    			for (int j = 0; j < CAPHEIGHT; j++) {
+    				int k = (j*CAPWIDTH+i)*3;
+    	    			refR += cpixels[k];
+    	    			refG += cpixels[k+1];
+    	    			refB += cpixels[k+2];
+    	    	}
+    	    }
+    		refR = refR / (CAPHEIGHT*CAPWIDTH);
+    		refG = refG / (CAPHEIGHT*CAPWIDTH);
+    		refB = refB / (CAPHEIGHT*CAPWIDTH);
+    		printf("refR = %d, refG = %d, refB = %d\n", refR, refG, refB);
+    	}
+
     	nFrame ++;
 
-    	if (debug_flag == true) {
+#if CHECK_TIMING
+    	if (debug1_flag == true) {
     		gettimeofday(&now, NULL);
     		timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
     		ofLog(OF_LOG_NOTICE, "%4.3lf 2. new frame %d", timeNow - prevTime, nFrame);
     		prevTime = timeNow;
     	}
+#endif
 
     	// SAVE IMAGES FOR DEBUG
     	// string fileName = "frame"+ofToString(nFrame)+".png";
@@ -135,95 +162,420 @@ void picoApp::update()
     		colorCaptureImg.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT);
     		grayCaptureImg = colorCaptureImg;
     		grayCaptureImg.threshold(threshold);
-    		sendBlobsEnable = (sendBlobsEnable == true ? false : true);
+    		// HUNG1 sendBlobsEnable = (sendBlobsEnable == true ? false : true);
 
-        	gettimeofday(&now, NULL);
-        	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
-        	ofLog(OF_LOG_NOTICE, "sendBlobsEnable = %d, time  = %4.3lf", sendBlobsEnable, timeNow);
+#if CHECK_TIMING
+        	if (debug1_flag == true) {
+        		gettimeofday(&now, NULL);
+        	   	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
+        	   	ofLog(OF_LOG_NOTICE, "sendBlobsEnable = %d, time  = %4.3lf", sendBlobsEnable, timeNow);
+        	}
+#endif
 
     		contourFinder.findContours(grayCaptureImg, MIN_AREA, MAX_AREA, 5, false);
-    		if (contourFinder.nBlobs)
+    		if (contourFinder.nBlobs) {
     			bUpdateBlobs = true;
+    		}
     	}
     	// Using markers to get H1 and H2
     	else {
     		unsigned char * cpixels = captureVid.getPixels();
     		
+    		/* grab image only when debug save key */
+    		if (bSaveImage) {
+    			colorCaptureImg.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT);
+    			grayCaptureImg = colorCaptureImg;
+    		}
+
     		switch (marker_type) {
 
 
     			case 0: // GREEN
 
-// HUNG1 DEBUG 04/07/2016
-#if 1
-    				colorCaptureImgSaved.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT);
-		    		grayCaptureImgSaved = colorCaptureImgSaved;
+// HUNG1 DEBUG 04/08/2016
 
-// DISPLAY 10 pixels at corner
-//    				for (int i = 0; i < CAPWIDTH*CAPHEIGHT*3; i++)
-//    			    	grayCaptureInvert[i] = 255 - cpixels[i];
-
-//    			    system("clear");
-//    			    printf("\n\n\n\n\n");
-//    			    for (int i = 0; i < 10; i++) {
-//    			        for (int j = 0; j < 10; j++) {
-//    			        	int k = (j*10+i)*3;
-//    			        	printf("(%3d %3d %3d)", cpixels[k], cpixels[k+1], cpixels[k+2]);
-//    			        }
-//    			        printf("\n");
-//    			    }
+    				// colorCaptureImgSaved.setFromPixels(captureVid.getPixels(), CAPWIDTH, CAPHEIGHT);
+		    		// grayCaptureImgSaved = colorCaptureImgSaved;
 
 		    		// system("clear");
 		    		// HUNG1
 		    		if (bLocalSearch == false) {
-		    			int indx[50];
-		    			int indy[50];
-		    			int cntx = 0;
-		    			int cnty = 0;
-		    			int px = 0;
-		    			int py = 0;
+		    			int indx[100];
+		    	    	int indy[100];
+		    	    	int numdet = 0;
+		    	    	int px = 0;
+		    	    	int py = 0;
+		    	    	int cntx = 0;
+		    	    	int cnty = 0;
+		    	    	int ix = 0;
+		    	    	int iy = 0;
+		    	    	int var1 = 0;
+
+		    	    	updateMatrix = true; /* update every frame with valided detections */
+
+		    			/* divided to four regions */
+		    	    	/* quad1 top left */
+		    			cntx = 0; numdet = 0; cnty = 0;
+		    			for (int j = 5; j < CAPHEIGHT/2; j++) {
+		    				for (int i = 5; i < CAPWIDTH/2; i++) {
+		    					int k = (j*CAPWIDTH+i)*3;
+								// search for red dot
+		    					if (cpixels[k] > 1.2*cpixels[k+1] && cpixels[k] > 1.3*cpixels[k+2] && cpixels[k] > 30) {
+									numdet ++;
+									ix = i;
+									iy = j;
+									grayCaptureInvert[k]=grayCaptureInvert[k+1]=grayCaptureInvert[k+2]=255;
+									if (debug1_flag == true && numdet == 1)
+										printf("    quad1[%d %d]=(%d,%d %d) \n", ix, iy, cpixels[k], cpixels[k+1], cpixels[k+2]);
+								}
+								else {
+									if (numdet > 5 && numdet < 100) {
+										if (cntx < 2) {
+											if (debug3_flag == true)
+												printf("i=%d,j=%d,ix=%d,iy=%d,numdet=%d,cnty=%d\n", i, j, ix, iy, numdet, cnty);
+
+											indx[cnty] = ix-numdet/2;
+											indy[cnty] = iy;
+
+											if (debug3_flag == true)
+												printf("(%2d)=[%3d %3d]\n ", cnty, indx[cnty], indy[cnty]);
+
+											// increase cntx, cnty
+											cntx ++;
+											if (cnty < 100) {
+												cnty ++;
+											}
+											else {
+												if (cnty >= 100) {
+													if (debug1_flag == true)
+														printf("too many rows detected\n");
+													break;
+												}
+											}
+										}
+										else {
+											if (debug1_flag == true)
+												printf("\ntoo many %d columns detected\n", cntx);
+											break;
+										}
+
+									}
+									grayCaptureInvert[k]=grayCaptureInvert[k+1]=grayCaptureInvert[k+2]=0;
+									numdet = 0;
+								}
+								cntx = 0;
+							}
+						}
+		    			// results
+						px = 0; py = 0; var1=0;
+						if (cnty > 0) {
+							int l = 0;
+							for (int l=0; l<cnty; l++) {
+								px += indx[l];
+								py += indy[l];
+							}
+							blx[var1] = px/cnty; bly[var1] = py/cnty;
+							if (debug3_flag == true)
+								printf("quad%d: blx=%3d, bly=%3d\n", var1, blx[var1], bly[var1]);
+						}
+						else {
+							updateMatrix = false;
+						}
+
+						/* quad2 bottom left */
+		    			cntx = 0; numdet = 0; cnty = 0;
+						for (int j = CAPHEIGHT/2; j < CAPHEIGHT; j++) {
+							for (int i = 5; i < CAPWIDTH/2; i++) {
+								int k = (j*CAPWIDTH+i)*3;
+								// search for red dot
+								if (cpixels[k] > 1.2*cpixels[k+1] && cpixels[k] > 1.3*cpixels[k+2] && cpixels[k] > 30) {
+									numdet ++;
+									ix = i;
+									iy = j;
+									grayCaptureInvert[k]=grayCaptureInvert[k+1]=grayCaptureInvert[k+2]=255;
+									if (debug1_flag == true && numdet == 1)
+										printf("    quad2[%d %d]=(%d,%d %d) \n", ix, iy, cpixels[k], cpixels[k+1], cpixels[k+2]);
+								}
+								else {
+									if (numdet > 5 && numdet < 100) {
+										if (cntx < 2) {
+											if (debug3_flag == true)
+												printf("i=%d,j=%d,ix=%d,iy=%d,numdet=%d,cnty=%d\n", i, j, ix, iy, numdet, cnty);
+
+											indx[cnty] = ix-numdet/2;
+											indy[cnty] = iy;
+
+											if (debug3_flag == true)
+												printf("(%2d)=[%3d %3d]\n ", cnty, indx[cnty], indy[cnty]);
+
+											// increase cntx, cnty
+											cntx ++;
+											if (cnty < 100) {
+												cnty ++;
+											}
+											else {
+												if (cnty >= 100) {
+													if (debug1_flag == true)
+														printf("too many rows detected\n");
+													break;
+												}
+											}
+										}
+										else {
+											if (debug1_flag == true)
+												printf("\ntoo many %d columns detected\n", cntx);
+											break;
+										}
+
+									}
+									grayCaptureInvert[k]=grayCaptureInvert[k+1]=grayCaptureInvert[k+2]=0;
+									numdet = 0;
+								}
+								cntx = 0;
+							}
+						}
+						// results
+						px = 0; py = 0; var1=1;
+						if (cnty > 0) {
+							int l = 0;
+							for (int l=0; l<cnty; l++) {
+								px += indx[l];
+								py += indy[l];
+							}
+							blx[var1] = px/cnty; bly[var1] = py/cnty;
+							if (debug3_flag == true)
+								printf("quad%d: blx=%3d, bly=%3d\n", var1, blx[var1], bly[var1]);
+						}
+						else {
+							updateMatrix = false;
+						}
+
+						/* quad3 top right */
+						cntx = 0; numdet = 0; cnty = 0;
+						for (int j = 5; j < CAPHEIGHT/2; j++) {
+							for (int i = CAPWIDTH/2; i < CAPWIDTH; i++) {
+								int k = (j*CAPWIDTH+i)*3;
+								// search for red dot
+								if (cpixels[k] > 1.2*cpixels[k+1] && cpixels[k] > 1.3*cpixels[k+2] && cpixels[k] > 30) {
+									numdet ++;
+									ix = i;
+									iy = j;
+									grayCaptureInvert[k]=grayCaptureInvert[k+1]=grayCaptureInvert[k+2]=255;
+									if (debug1_flag == true && numdet == 1)
+										printf("    quad3[%d %d]=(%d,%d %d) \n", ix, iy, cpixels[k], cpixels[k+1], cpixels[k+2]);
+								}
+								else {
+									if (numdet > 5 && numdet < 100) {
+										if (cntx < 2) {
+											if (debug3_flag == true)
+												printf("i=%d,j=%d,ix=%d,iy=%d,numdet=%d,cnty=%d\n", i, j, ix, iy, numdet, cnty);
+
+											indx[cnty] = ix-numdet/2;
+											indy[cnty] = iy;
+
+											if (debug3_flag == true)
+												printf("(%2d)=[%3d %3d]\n ", cnty, indx[cnty], indy[cnty]);
+
+											// increase cntx, cnty
+											cntx ++;
+											if (cnty < 100) {
+												cnty ++;
+											}
+											else {
+												if (cnty >= 100) {
+													if (debug1_flag == true)
+														printf("too many rows detected\n");
+													break;
+												}
+											}
+										}
+										else {
+											if (debug1_flag == true)
+												printf("\ntoo many %d columns detected\n", cntx);
+											break;
+										}
+
+									}
+									grayCaptureInvert[k]=grayCaptureInvert[k+1]=grayCaptureInvert[k+2]=0;
+									numdet = 0;
+								}
+								cntx = 0;
+							}
+						}
+						// results
+						px = 0; py = 0; var1=2;
+						if (cnty > 0) {
+							int l = 0;
+							for (int l=0; l<cnty; l++) {
+								px += indx[l];
+								py += indy[l];
+							}
+							blx[var1] = px/cnty; bly[var1] = py/cnty;
+							if (debug3_flag == true)
+								printf("quad%d: blx=%3d, bly=%3d\n", var1, blx[var1], bly[var1]);
+						}
+						else {
+							updateMatrix = false;
+						}
+
+						/* quad4 bottom right */
+						cntx = 0; numdet = 0; cnty = 0;
+						for (int j = CAPHEIGHT/2; j < CAPHEIGHT; j++) {
+							for (int i = CAPWIDTH/2; i < CAPWIDTH; i++) {
+								int k = (j*CAPWIDTH+i)*3;
+								// search for red dot
+								if (cpixels[k] > 1.2*cpixels[k+1] && cpixels[k] > 1.3*cpixels[k+2] && cpixels[k] > 30) {
+									numdet ++;
+									ix = i;
+									iy = j;
+									grayCaptureInvert[k]=grayCaptureInvert[k+1]=grayCaptureInvert[k+2]=255;
+									if (debug1_flag == true && numdet == 1)
+										printf("    quad4[%d %d]=(%d,%d %d) \n", ix, iy, cpixels[k], cpixels[k+1], cpixels[k+2]);
+								}
+								else {
+									if (numdet > 5 && numdet < 100) {
+										if (cntx < 2) {
+											if (debug3_flag == true)
+												printf("i=%d,j=%d,ix=%d,iy=%d,numdet=%d,cnty=%d\n", i, j, ix, iy, numdet, cnty);
+
+											indx[cnty] = ix-numdet/2;
+											indy[cnty] = iy;
+
+											if (debug3_flag == true)
+												printf("(%2d)=[%3d %3d]\n ", cnty, indx[cnty], indy[cnty]);
+
+											// increase cntx, cnty
+											cntx ++;
+											if (cnty < 100) {
+												cnty ++;
+											}
+											else {
+												if (cnty >= 100) {
+													if (debug1_flag == true)
+														printf("too many rows detected\n");
+													break;
+												}
+											}
+										}
+										else {
+											if (debug1_flag == true)
+												printf("\ntoo many %d columns detected\n", cntx);
+											break;
+										}
+
+									}
+									grayCaptureInvert[k]=grayCaptureInvert[k+1]=grayCaptureInvert[k+2]=0;
+									numdet = 0;
+								}
+								cntx = 0;
+							}
+						}
+						// results
+						px = 0; py = 0; var1=3;
+						if (cnty > 0) {
+							int l = 0;
+							for (int l=0; l<cnty; l++) {
+								px += indx[l];
+								py += indy[l];
+							}
+							blx[var1] = px/cnty; bly[var1] = py/cnty;
+							if (debug3_flag == true)
+								printf("quad%d: blx=%3d, bly=%3d\n", var1, blx[var1], bly[var1]);
+						}
+						else {
+							updateMatrix = false;
+						}
+
+						if (debug2_flag) {
+							for (var1 = 0; var1 < 4; var1++)
+								printf("(%3d,%3d) ", blx[var1], bly[var1]);
+							printf("\n");
+						}
+		    		}
+
+#if 0
+    if (bLocalSearch == false) {
+    						int indx[2][50];
+    		    			int indy[2][50];
+    		    			int numdet = 0;
+    		    			int px[2];
+    		    			int py[2];
+    		    			int blx[4];
+    		    			int bly[4];
+
 
 		    			for (int j = 0; j < CAPHEIGHT; j++) {
 		    				cntx = 0;
+		    				numdet = 0;
 		    				for (int i = 0; i < CAPWIDTH; i++) {
 		    					int k = (j*CAPWIDTH+i)*3;
 		    					// search for red dot
-		    					if (cpixels[k] > 1.3*cpixels[k+1] && cpixels[k] > 1.3*cpixels[k+2] && cpixels[k] > 50) {
-		    						cntx ++;
+		    					if (cpixels[k] > 1.2*cpixels[k+1] && cpixels[k] > 1.2*cpixels[k+2] && cpixels[k] > 30) {
+		    						numdet ++;
 		    						grayCaptureInvert[k]=grayCaptureInvert[k+1]=grayCaptureInvert[k+2]=255;
-		    						// printf("r[%d %d]=(%d,%d %d) ", i, j, cpixels[k], cpixels[k+1], cpixels[k+2]);
+		    						if (debug1_flag == true)
+		    							printf("    pixel%d[%d %d]=(%d,%d %d) \n", numdet, i, j, cpixels[k], cpixels[k+1], cpixels[k+2]);
 		    					}
 		    					else {
-		    						if (cntx > 5 && cntx < 50) {
-		    							indx[cnty] = i-1-cntx/2;
-		    							indy[cnty] = j;
-		    							// printf("%d[%d %d] ", cnty, indx[cnty], indy[cnty]);
-		    							if (cnty < 50) {
+		    						if (numdet > 5 && numdet < 50) {
+		    							if (cnty < 50 && cntx == 0) {
 		    								cnty ++;
 		    							}
 		    							else {
-		    								printf("too many points\n");
+		    								if (cnty >= 50) {
+		    									if (debug1_flag == true)
+		    										printf("too many rows detected\n");
+		    									break;
+		    								}
+		    							}
+
+		    							if (cntx < 2) {
+		    								indx[cntx][cnty] = i-1-numdet/2;
+		    								indy[cntx][cnty] = j;
+		    								if (debug1_flag == true)
+		    									printf("\n(%2d,%2d)=[%3d %3d]\n ", cntx, cnty, indx[cntx][cnty], indy[cntx][cnty]);
+		    								cntx ++;
+		    							}
+		    							else {
+		    								if (debug1_flag == true)
+		        								printf("\ntoo many %d columns detected\n", cntx);
 		    								break;
 		    							}
+
+
 		    						}
-		    						cntx = 0;
+		    						numdet = 0;
 		    						grayCaptureInvert[k]=grayCaptureInvert[k+1]=grayCaptureInvert[k+2]=0;
 		    					}
 		    				}
 		    			}
 
 		    			// results
-		    			if (cnty > 0) {
-		    				for (int i=0; i<cnty; i++) {
-		    					printf("[%d %d]", indx[i], indy[i]);
-		    					px += indx[i];
-		    					py += indy[i];
+		    			cntx = 2; // FIXED 2x2 dots HUNG1
+		    			if (cnty > 0 && cntx == 2) {
+		    				// printf("cnty = %d\n", cnty);
+		    				int k = 0;
+		    				for (int i=0; i<cntx; i++) {
+		    					for (int j=0; j<cnty; j++) {
+		    						// printf("[%3d %3d] ", indx[i][j], indy[i][j]);
+		    						px[i] += indx[i][j];
+		    						py[i] += indy[i][j];
+		    						// detect jumping
+		    						if (indy[i][cnty-1] - indy[i][j] > 50) {
+		    							blx[k] = px[i]/(cntx*cnty); bly[k] = py[i]/(cntx*cnty);
+		    							px[i] = py[i] = 0;
+		    							// printf("%d[%3d %3d] ", k, blx[k], bly[k]);
+		    							k ++;
+		    						}
+		    					}
+		    					blx[k] = px[i]/(cntx*cnty); bly[k] = py[i]/(cntx*cnty);
+		    					// printf("%d[%3d %3d] ", k, blx[k], bly[k]);
+		    					k++;
 		    				}
-		    				printf("\ncenter = [%d %d]\n", px/cnty, py/cnty);
 		    			}
 					}
-    			    break;
 
+#endif
 
 //    				for (int i = 0; i < 10; i++) {
 //    					for (int j = 0; j < 10; j++) {
@@ -246,22 +598,6 @@ void picoApp::update()
 //    		    		}
 //    				}
 
-#else
-    				// detect GREEN only
-    				for (int i = 0; i < CAPWIDTH; i++) {
-    					for (int j = 0; j < CAPHEIGHT; j++) {
-    						int k = (j*CAPWIDTH+i)*3;
-    						// printf("%d %d %d ", cpixels[k], cpixels[k+1], cpixels[k+2]);
-    						// if (cpixels[k+1] > threshold_green) {
-    						if (cpixels[k+1] > (cpixels[k]+cpixels[k+2])) {
-    							grayCaptureInvert[k] = 255;
-    							grayCaptureInvert[k+1] = 255;
-    							grayCaptureInvert[k+2] = 255;
-    						}
-    					}
-    					printf("\n");
-    				}
-#endif
     				break;
 
     			case 1: // BLACK
@@ -272,6 +608,8 @@ void picoApp::update()
     			default:;
     		}
 
+    		// HUNG1
+#if ENABLE_CONTOUR_FINDER
     		colorCaptureImg.setFromPixels(grayCaptureInvert, CAPWIDTH, CAPHEIGHT);
     		grayCaptureImg = colorCaptureImg;
     		grayCaptureImg.threshold(threshold);
@@ -279,17 +617,20 @@ void picoApp::update()
     		contourFinder.findContours(grayCaptureImg, MIN_AREA, MAX_AREA, 5, false);
     		if (contourFinder.nBlobs)
     			bUpdateBlobs = true;
+#endif
     	}
 
 
     	// pixelOutput.loadData(grayCaptureInvert, CAPWIDTH,CAPHEIGHT, GL_RGB);
 
     	// capture without marker
+#if 0
     	if (bUpdateBackground == true) {
     		grayCaptureImgSaved = grayCaptureImg;
     		bUpdateBackground = false;
     		ofLog(OF_LOG_NOTICE, ">>>>> update background");
     	}
+#endif
 
     	// grayDiff.absDiff(grayCaptureImgSaved, grayCaptureImg);
     	// grayCaptureImgSaved = grayCaptureImg;
@@ -305,6 +646,7 @@ void picoApp::update()
     	// grabImg.setFromPixels(grayDiff.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_GRAYSCALE, true);
 
 
+    	// if (bSaveImage == true || updateHref == true) {
     	if (bSaveImage == true) {
     		grabImg.setFromPixels(grayCaptureImg.getPixels(), CAPWIDTH, CAPHEIGHT, OF_IMAGE_GRAYSCALE, true);
     		string fileName = "frame"+ofToString(nFrame)+".png";
@@ -313,12 +655,15 @@ void picoApp::update()
     	    ofLog(OF_LOG_NOTICE, ">>>>> save frame %d \n", nFrame);
     	}
 
-    	if (debug_flag == true) {
+#if CHECK_TIMING
+    	if (debug1_flag == true) {
         	gettimeofday(&now, NULL);
         	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
         	ofLog(OF_LOG_NOTICE, "%4.3lf 3. update stop", timeNow - prevTime);
         	prevTime = timeNow;
     	}
+#endif
+
 
     }
 }
@@ -640,16 +985,21 @@ void picoApp::draw(){
     int blobPosY[8];
     int blobPosA[8];
 
-    if (debug_flag == true) {
+#if CHECK_TIMING
+    if (debug1_flag == true) {
         gettimeofday(&now, NULL);
         timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
         ofLog(OF_LOG_NOTICE, "%4.3lf 4. draw start", timeNow - prevTime);
         prevTime = timeNow;
     }
+#endif
+
+#if 1 // ENABLE_CONTOUR_FINDER for Href
 
     int nBlobs = contourFinder.nBlobs;
 
-    if (debug_flag == true) {
+#if CHECK_TIMING
+    if (debug1_flag == true) {
 		// printf("\nFRAME[%d] %d blobs:", nFrame, nBlobs);
     	for (i=0; i < nBlobs; i++) {
    		    blobPosX[i] = contourFinder.blobs[i].centroid.x;
@@ -657,7 +1007,7 @@ void picoApp::draw(){
    		    blobPosA[i]  = contourFinder.blobs[i].area;
    		    // printf("(%d %d %d)",blobPosX[i],blobPosY[i],blobPosA[i]);
 
-   		    if (debug_flag == true) {
+   		    if (debug1_flag == true) {
    		        gettimeofday(&now, NULL);
    		        timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
    		        ofLog(OF_LOG_NOTICE, "%4.3lf 5. (%d %d %d)", timeNow - prevTime, blobPosX[i],blobPosY[i],blobPosA[i]);
@@ -666,14 +1016,16 @@ void picoApp::draw(){
         }
    		// printf("\n");
    	}
+#endif
 
+    // bUpdateBlobs for Href only
     if (bUpdateBlobs) {
     	bUpdateBlobs = false;
 
     	// if ( (nBlobs == 8 || nBlobs == 4) && updatedMatrix == false)  {
     	if (nBlobs == 4)  { // need all 4 blobs detected to be valid
-
     		updateMatrix = true;
+    		sendBlobsEnable = false;
 
     		for (i=0; i < nBlobs; i++) {
     		    blobPosX[i] = contourFinder.blobs[i].centroid.x;
@@ -722,15 +1074,12 @@ void picoApp::draw(){
     			}
     		}
 
-//    		if (debug_flag == true) {
-//        		printf("\nFRAME[%d]:", nFrame);
-//        		for (i=0; i < nBlobs; i++) {
-//        			printf("(%d %d %d)",blobPosX[i],blobPosY[i],blobPosA[i]);
-//        		}
-//        		printf("\n");
-//        	}
+      		for (i=0; i < nBlobs; i++) {
+      			printf("blob(%d %d %d)",blobPosX[i],blobPosY[i],blobPosA[i]);
+        	}
+       		printf("\n");
 
-    		/* getMatrixDistance to determine updating the homography matrix */
+       		/* getMatrixDistance to determine updating the homography matrix */
     		float distance = 0.0;
     		for (i=0; i<nBlobs; i++) {
     			blobPos[i].x = blobPosX[i];
@@ -749,11 +1098,15 @@ void picoApp::draw(){
 //    		else {
 //    			updateMatrix = false;
 //       		}
+
+
+
     	}
     	else {
     		updateMatrix = false;
     	}
     }
+#endif // ENABLE_CONTOUR_FINDER
 
 #ifdef ENABLE_OMXPLAYER
     unsigned char *pixels = omxPlayer.getPixels();
@@ -771,50 +1124,71 @@ void picoApp::draw(){
 //		dst[1].set(blobPosSaved[1].x,blobPosSaved[1].y);
 //		dst[2].set(blobPosSaved[2].x,blobPosSaved[2].y);
 //		dst[3].set(blobPosSaved[3].x,blobPosSaved[3].y);
-		dst[0].set(blobPos[0].x,blobPos[0].y);
-		dst[1].set(blobPos[1].x,blobPos[1].y);
-		dst[2].set(blobPos[2].x,blobPos[2].y);
-		dst[3].set(blobPos[3].x,blobPos[3].y);
+		//		dst[0].set(blobPos[0].x,blobPos[0].y);
+		//		dst[1].set(blobPos[1].x,blobPos[1].y);
+		//		dst[2].set(blobPos[2].x,blobPos[2].y);
+		//		dst[3].set(blobPos[3].x,blobPos[3].y);
+
+		// HUNG1
+
 
 		// update Href with generated blobs and capture images
 		if (updateHref == true) {
 			updateHref = false;
+			dst[0].set(blobPos[0].x,blobPos[0].y);
+			dst[1].set(blobPos[1].x,blobPos[1].y);
+			dst[2].set(blobPos[2].x,blobPos[2].y);
+			dst[3].set(blobPos[3].x,blobPos[3].y);
 			ofhref = getResyncHomography3x3(src,dst);
 			ofhrefinv = getResyncHomography3x3(dst,src);
 			validHref = true;
-			printf(">>>>>>>>>>>>> Href updated, press 1 to update Href, 2 to update H1\n");
+			printf("\nHref: POS (%3.0lf,%3.0lf) (%3.0f,%3.0lf) (%3.0lf,%3.0lf) (%3.0lf,%3.0lf)\n", blobPos[0].x, blobPos[0].y,blobPos[1].x, blobPos[1].y,blobPos[2].x, blobPos[2].y,blobPos[3].x, blobPos[3].y);
 		}
 		else if (updateH1 == true) {
 			updateH1 = false;
+			dst[0].set(blx[0],bly[0]);
+			dst[1].set(blx[1],bly[1]);
+			dst[2].set(blx[2],bly[2]);
+			dst[3].set(blx[3],bly[3]);
 			ofh1inv = getResyncHomography3x3(dst,src);
 			validH1 = true;
-			printf(">>>>>>>>>>>>> H1 updated, press 1 to update Href, 2 to update H1\n");
+			printf("\nH1: ");
+			for (var1 = 0; var1 < 4; var1++)
+				printf("(%3d,%3d) ", blx[var1], bly[var1]);
+			printf("\n");
 		}
 		else {
+			dst[0].set(blx[0],bly[0]);
+			dst[1].set(blx[1],bly[1]);
+			dst[2].set(blx[2],bly[2]);
+			dst[3].set(blx[3],bly[3]);
 			ofh2 = getResyncHomography3x3(src,dst);
 		}
 
 		// Hc = ofh1inv*ofhref;
 		if (validHref == true && validH1 == true) {
 			Hc = ofhrefinv*ofh2*ofh1inv*ofhref;
-
 			resyncMatrix[0] = Hc[0]; resyncMatrix[1] = Hc[1]; resyncMatrix[2] = 0; resyncMatrix[3] = Hc[2];
 			resyncMatrix[4] = Hc[3]; resyncMatrix[5] = Hc[4]; resyncMatrix[6] = 0; resyncMatrix[7] = Hc[5];
 			resyncMatrix[8] = 0;     resyncMatrix[9] = 0;     resyncMatrix[10]= 0; resyncMatrix[11] = 0;
 			resyncMatrix[12] = Hc[6];resyncMatrix[13] = Hc[7];resyncMatrix[14]= 0; resyncMatrix[15] = Hc[8];
 		}
 
-//		printf(">>>>>>>>>>>>> updated resyncMatrix = ");
-		//for (i=0; i<16; i++)
-		//	printf("%4.2f ", resyncMatrix[i]);
-		//printf("\n");
+		if (debug4_flag == true) {
+			for (i=0; i<9; i++)
+				printf("%3.2f ", Hc[i]);
+			printf("\n");
+		}
 
-		if (debug_flag == true) {
+#if CHECK_TIMING
+		if (debug1_flag == true) {
 		    gettimeofday(&now, NULL);
 		    timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
 		    ofLog(OF_LOG_NOTICE, "%4.3lf 6. update MATRIX", timeNow - prevTime);
 		    prevTime = timeNow;
 		}
+#endif
+
     	updateMatrix = false;
 	}
 
@@ -848,7 +1222,7 @@ void picoApp::draw(){
 #endif
 
 // HUNG1 DEBUG ONLY
-#if 1
+#if OUTPUT_TO_DEBUG_LCD_DISPLAY
     // colorCaptureImg.draw(0,0,640,480); no video?
     // captureVid.draw(); yes
     grayCaptureImg.draw(0,0,320,240);
@@ -857,12 +1231,20 @@ void picoApp::draw(){
     grayCaptureImgSaved.draw(320,240,320,240);
 
 #else
-    updatedMatrix = false;
-    glPushMatrix();
-    glMultMatrixf(resyncMatrix);
-    glTranslatef(0,0,0);
-    pixelOutput.draw(0, 0, 640, 480); 
-    glPopMatrix();
+    if (debug3_flag == true) {
+        grayCaptureImg.draw(0,0,320,240);
+    	contourFinder.draw(320,0,320,240);
+    	colorCaptureImgSaved.draw(0,240,320,240);
+    	grayCaptureImgSaved.draw(320,240,320,240);
+    }
+    else {
+    	updatedMatrix = false;
+    	glPushMatrix();
+    	glMultMatrixf(resyncMatrix);
+    	glTranslatef(0,0,0);
+    	pixelOutput.draw(0, 0, 640, 480);
+    	glPopMatrix();
+    }
 #endif
 
 #if NO_HOMOGRAPHY_TRANFORM
@@ -890,13 +1272,14 @@ void picoApp::draw(){
     ofRect(WIDTH-HOFFSET-2*VOFFSET,HEIGHT-2*VOFFSET,2*VOFFSET,2*VOFFSET);
 
     ofSetHexColor(0xFFFFFF);
+#endif
+
     if (sendBlobsEnable == true) {
     	ofCircle(HOFFSET+VOFFSET,VOFFSET,BLOBRADIUS);
     	ofCircle(WIDTH-HOFFSET-VOFFSET,VOFFSET,BLOBRADIUS);
     	ofCircle(HOFFSET+VOFFSET,HEIGHT-VOFFSET,BLOBRADIUS);
     	ofCircle(WIDTH-HOFFSET-VOFFSET,HEIGHT-VOFFSET,BLOBRADIUS);
     }
-#endif
 
     // gettimeofday(&now, NULL);
     // timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
@@ -936,13 +1319,14 @@ void picoApp::draw(){
     // grabImg.grabScreen(0,0,640,480);
     // string fileName = "frame"+ofToString(nFrame)+".png";
     // grabImg.saveImage(fileName);
-
-    if (debug_flag == true) {
+#if CHECK_TIMING
+    if (debug1_flag == true) {
         gettimeofday(&now, NULL);
     	timeNow = (double)now.tv_sec + (0.000001 * now.tv_usec);
     	ofLog(OF_LOG_NOTICE, "%4.3lf 7. draw exit", timeNow - prevTime);
         prevTime = timeNow;
     }
+#endif
 
 }
 
@@ -3746,29 +4130,48 @@ void picoApp::keyPressed(int key) {
 	ofLog(OF_LOG_VERBOSE, "%c keyPressed", key);
 
 	switch (key) {
-		case '1':
+		case '1': // Href
+		sendBlobsEnable = true;
 		bUpdateBlobs = false;
 		updateMatrix = false;
+		updateH1 = false;
 		updateHref = true;
 		break;
 
-		case '2':
-		updateH1 = true;
-		updateMatrix = false;
+		case '2': // H1
+		sendBlobsEnable = false;
 		bUpdateBlobs = false;
+		updateMatrix = false;
+		updateHref = false;
+		updateH1 = true;
 		break;
 
-		case 'd':
-		debug_flag = (debug_flag == true ? false : true);
-		printf("toggle debug_flag, current debug = %d\n", debug_flag);
+		case 'd': // Debug1
+		debug1_flag = (debug1_flag == true ? false : true);
+		printf("toggle debug_flag (dfgh), current debug1 = %d\n", debug1_flag);
 		break;
 
-		case 't':
+		case 'f': // Debug2
+		debug2_flag = (debug2_flag == true ? false : true);
+		printf("toggle debug2_flag (dfgh), current debug2 = %d\n", debug2_flag);
+		break;
+
+		case 'g': // Debug3
+		debug3_flag = (debug3_flag == true ? false : true);
+		printf("toggle debug3_flag (dfgh), current debug3 = %d\n", debug3_flag);
+		break;
+
+		case 'h': // hDebug less messages
+		debug4_flag = (debug4_flag == true ? false : true);
+		printf("toggle debug4_flag (dfgh), current debug4 = %d\n", debug4_flag);
+		break;
+
+		case 't': // Marker Red and Black
 		marker_type = (marker_type == 0 ? 1 : 0);
 		printf("toggle marker_type, marker_color = %d\n", marker_type);
 		break;
 
-		case 'r':
+		case 'r': // Display debug messages on screen
 		show_debug_flag = (show_debug_flag == true ? false : true);
 		printf("toggle show_debug_flag, current debug = %d\n", show_debug_flag);
 		break;
